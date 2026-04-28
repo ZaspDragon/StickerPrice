@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Line Check Counter | Zebra QR Labels</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Line Check Counter</h1>
+      <p>Print Zebra QR stickers, scan checked lines, and count worker productivity.</p>
+    </div>
+    <button id="printLabelsBtn" class="primary">Print Labels</button>
+  </header>
+
+  <main class="layout">
+    <section class="card">
+      <h2>Create Zebra Stickers</h2>
+      <p class="hint">Add one receiving/check line at a time, or paste multiple lines below.</p>
+
+      <div class="grid">
+        <label>Worker Name
+          <input id="workerName" placeholder="Angel Quincel" />
+        </label>
+
+        <label>PO / Transfer #
+          <input id="poNumber" placeholder="463090" />
+        </label>
+
+        <label>Item #
+          <input id="itemNumber" placeholder="SXFR0202592" />
+        </label>
+
+        <label>Quantity
+          <input id="quantity" type="number" min="0" placeholder="4" />
+        </label>
+
+        <label>Description
+          <input id="description" placeholder='36" x 80" PVC 3" Louver Bifold Door' />
+        </label>
+
+        <label>Label Count
+          <input id="labelCopies" type="number" min="1" value="1" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="addLabelBtn">Add Label</button>
+        <button id="clearLabelsBtn" class="ghost">Clear Labels</button>
+      </div>
+
+      <hr />
+
+      <h3>Bulk Paste</h3>
+      <p class="hint">Format: PO, Item, Qty, Description — one line per sticker.</p>
+      <textarea id="bulkText" rows="6" placeholder="463090, SXFR0202592, 4, 36 x 80 PVC Louver Bifold Door"></textarea>
+      <button id="bulkAddBtn">Add Bulk Labels</button>
+    </section>
+
+    <section class="card">
+      <h2>Check Line</h2>
+      <p class="hint">Scan the QR code with your phone camera or a USB scanner. It will count the line once.</p>
+
+      <label>Scan / Paste QR Data
+        <textarea id="scanInput" rows="5" placeholder="Scan QR here..."></textarea>
+      </label>
+
+      <button id="checkLineBtn" class="primary">Mark Line Checked</button>
+
+      <div class="stats">
+        <div>
+          <strong id="todayTotal">0</strong>
+          <span>Total Checked Today</span>
+        </div>
+        <div>
+          <strong id="workerTotal">0</strong>
+          <span>Selected Worker Today</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="resetChecksBtn" class="danger">Reset Checks</button>
+      </div>
+    </section>
+  </main>
+
+  <section class="card wide">
+    <h2>Printable Zebra Label Sheet</h2>
+    <p class="hint">For Zebra/sticker paper, set print scale to 100%, margins none/minimum, and choose your label size.</p>
+    <div id="labelSheet" class="label-sheet"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Daily Line Check Log</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date/Time</th>
+            <th>Worker</th>
+            <th>PO/Transfer</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Description</th>
+            <th>Line ID</th>
+          </tr>
+        </thead>
+        <tbody id="checkLogBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <template id="labelTemplate">
+    <div class="zebra-label">
+      <div class="label-left">
+        <canvas class="qr"></canvas>
+      </div>
+      <div class="label-right">
+        <div class="label-title">LINE CHECK</div>
+        <div><b>PO:</b> <span class="po"></span></div>
+        <div><b>Item:</b> <span class="item"></span></div>
+        <div><b>Qty:</b> <span class="qty"></span></div>
+        <div><b>Desc:</b> <span class="desc"></span></div>
+        <div><b>ID:</b> <span class="lineid"></span></div>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
