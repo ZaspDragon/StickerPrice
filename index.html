@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Line Check Counter | Zebra QR Labels</title>
   <link rel="stylesheet" href="style.css" />
+
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
   <header class="topbar">
     <div>
@@ -19,7 +22,7 @@
   <main class="layout">
     <section class="card">
       <h2>Create Zebra Stickers</h2>
-      <p class="hint">Add one receiving/check line at a time, or paste multiple lines below.</p>
+      <p class="hint">Add one receiving/check line at a time, paste lines, or upload a PO file.</p>
 
       <div class="grid">
         <label>Worker Name
@@ -42,6 +45,10 @@
           <input id="description" placeholder='36" by 48" blinds' />
         </label>
 
+        <label>Location
+          <input id="location" placeholder="A12-03" />
+        </label>
+
         <label>Label Count
           <input id="labelCopies" type="number" min="1" value="1" />
         </label>
@@ -55,38 +62,40 @@
       <hr />
 
       <h3>Bulk Paste</h3>
-      <p class="hint">Format: PO, Item, Qty, Description — one line per sticker.</p>
-      <textarea id="bulkText" rows="6" placeholder="PO237555, 601535, 32, 36 by 48 blinds"></textarea>
+      <p class="hint">Format: PO, Item, Qty, Description, Location — one line per sticker.</p>
+      <textarea id="bulkText" rows="6" placeholder="PO237555, 601535, 32, 36 by 48 blinds, A12-03"></textarea>
       <button id="bulkAddBtn">Add Bulk Labels</button>
+
+      <hr />
+
+      <h3>Upload PO / Transfer File</h3>
+      <p class="hint">Upload CSV, XLS, or XLSX files with PO, item, qty, description, and location columns.</p>
+
+      <input id="poFileInput" type="file" accept=".csv,.xlsx,.xls" />
+
+      <div class="actions">
+        <button id="previewPoBtn">Preview PO File</button>
+        <button id="importPoBtn" class="primary">Import PO Lines</button>
+      </div>
+
+      <div id="importSummary" class="hint"></div>
+
+      <div class="table-wrap small-table">
+        <table>
+          <thead>
+            <tr>
+              <th>PO</th>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Description</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody id="poPreviewBody"></tbody>
+        </table>
+      </div>
     </section>
-    <hr />
 
-<h3>Upload PO / Transfer File</h3>
-<p class="hint">Upload a CSV or Excel file with PO, item, qty, description, and location columns.</p>
-
-<input id="poFileInput" type="file" accept=".csv,.xlsx,.xls" />
-
-<div class="actions">
-  <button id="previewPoBtn">Preview PO File</button>
-  <button id="importPoBtn" class="primary">Import PO Lines</button>
-</div>
-
-<div id="importSummary" class="hint"></div>
-
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>PO</th>
-        <th>Item</th>
-        <th>Qty</th>
-        <th>Description</th>
-        <th>Location</th>
-      </tr>
-    </thead>
-    <tbody id="poPreviewBody"></tbody>
-  </table>
-</div>
     <section class="card">
       <h2>Check Line</h2>
       <p class="hint">Scan the QR code with your phone camera or a USB scanner. It will count the line once.</p>
@@ -115,9 +124,9 @@
     </section>
   </main>
 
-  <section class="card wide">
+  <section class="card wide print-card">
     <h2>Printable Zebra Label Sheet</h2>
-    <p class="hint">Set print scale to 100%, margins none/minimum, and choose your Zebra label size.</p>
+    <p class="hint">For Zebra: use 4in x 2in label size, scale 100%, margins none/minimum.</p>
     <div id="labelSheet" class="label-sheet"></div>
   </section>
 
@@ -133,6 +142,7 @@
             <th>Item</th>
             <th>Qty</th>
             <th>Description</th>
+            <th>Location</th>
             <th>Line ID</th>
           </tr>
         </thead>
@@ -146,12 +156,14 @@
       <div class="label-left">
         <canvas class="qr"></canvas>
       </div>
+
       <div class="label-right">
         <div class="label-title">LINE CHECK</div>
         <div><b>PO:</b> <span class="po"></span></div>
         <div><b>Item:</b> <span class="item"></span></div>
         <div><b>Qty:</b> <span class="qty"></span></div>
         <div><b>Desc:</b> <span class="desc"></span></div>
+        <div><b>Loc:</b> <span class="location"></span></div>
         <div><b>ID:</b> <span class="lineid"></span></div>
       </div>
     </div>
