@@ -245,7 +245,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  $("printLabelsBtn")?.addEventListener("click", () => window.print());
+  $("printLabelsBtn")?.addEventListener("click", () => {
+  const labels = document.querySelectorAll(".zebra-label");
+
+  if (!labels.length) {
+    alert("Add at least one label before printing.");
+    return;
+  }
+
+  window.print();
+});
 
   $("clearLabelsBtn")?.addEventListener("click", () => {
     if (confirm("Clear all printable labels?")) {
