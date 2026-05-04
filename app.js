@@ -6,6 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
     checks: JSON.parse(localStorage.getItem("lineChecks") || "[]")
   };
 
+  let importedPoRows = [];
+
   function save() {
     localStorage.setItem("lineLabels", JSON.stringify(state.labels));
     localStorage.setItem("lineChecks", JSON.stringify(state.checks));
@@ -15,9 +17,21 @@ document.addEventListener("DOMContentLoaded", () => {
     return date.toISOString().slice(0, 10);
   }
 
-  function makeLineId(po, item) {
+  function makeLineId(po, item, location = "") {
     const stamp = Date.now().toString(36).toUpperCase();
-    return `${po || "NOPO"}-${item || "NOITEM"}-${stamp}`.replace(/\s+/g, "");
+    const safePo = String(po || "NOPO").replace(/\s+/g, "");
+    const safeItem = String(item || "NOITEM").replace(/\s+/g, "");
+    const safeLoc = String(location || "").replace(/\s+/g, "");
+    return `${safePo}-${safeItem}-${safeLoc}-${stamp}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
 
   function labelPayload(label) {
@@ -28,11 +42,12 @@ document.addEventListener("DOMContentLoaded", () => {
       item: label.item,
       qty: label.qty,
       description: label.description,
+      location: label.location || "",
       createdAt: label.createdAt
     });
   }
 
-  function addLabel({ po, item, qty, description, copies = 1 }) {
+  function addLabel({ po, item, qty, description, location, copies = 1 }) {
     copies = Math.max(1, Number(copies) || 1);
 
     if (!po || !item) {
@@ -42,11 +57,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (let i = 0; i < copies; i++) {
       state.labels.push({
-        lineId: makeLineId(po, item),
+        lineId: makeLineId(po, item, location),
         po,
         item,
         qty,
         description,
+        location,
         createdAt: new Date().toISOString()
       });
     }
@@ -60,10 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const sheet = $("labelSheet");
     const template = $("labelTemplate");
 
-    if (!sheet || !template) {
-      console.error("Missing labelSheet or labelTemplate.");
-      return;
-    }
+    if (!sheet || !template) return;
 
     sheet.innerHTML = "";
 
@@ -74,6 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
       node.querySelector(".item").textContent = label.item || "";
       node.querySelector(".qty").textContent = label.qty || "";
       node.querySelector(".desc").textContent = label.description || "";
+
+      const locEl = node.querySelector(".location");
+      if (locEl) locEl.textContent = label.location || "";
+
       node.querySelector(".lineid").textContent = label.lineId || "";
 
       const canvas = node.querySelector(".qr");
@@ -83,6 +100,8 @@ document.addEventListener("DOMContentLoaded", () => {
           width: 120,
           margin: 1,
           errorCorrectionLevel: "M"
+        }).catch(() => {
+          canvas.replaceWith(document.createTextNode("QR failed"));
         });
       } else {
         canvas.replaceWith(document.createTextNode("QR library failed"));
@@ -100,20 +119,25 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const lines = raw.split("\n").map(x => x.trim()).filter(Boolean);
+    const lines = raw.split("\n").map((x) => x.trim()).filter(Boolean);
     let added = 0;
+    let skipped = 0;
 
     lines.forEach((line) => {
-      const [po, item, qty, ...descParts] = line.split(",");
+      const [po, item, qty, description, location] = line.split(",");
 
-      if (!po || !item) return;
+      if (!po || !item) {
+        skipped++;
+        return;
+      }
 
       state.labels.push({
-        lineId: makeLineId(po.trim(), item.trim()),
+        lineId: makeLineId(po.trim(), item.trim(), location?.trim() || ""),
         po: po.trim(),
         item: item.trim(),
         qty: (qty || "").trim(),
-        description: descParts.join(",").trim(),
+        description: (description || "").trim(),
+        location: (location || "").trim(),
         createdAt: new Date().toISOString()
       });
 
@@ -124,44 +148,15 @@ document.addEventListener("DOMContentLoaded", () => {
     renderLabels();
     $("bulkText").value = "";
 
-    alert(`${added} bulk sticker label(s) added.`);
-  }
-
-  function renderLog() {
-    const body = $("checkLogBody");
-    if (!body) return;
-
-    body.innerHTML = "";
-
-    state.checks.forEach((row) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${new Date(row.checkedAt).toLocaleString()}</td>
-        <td>${row.worker || ""}</td>
-        <td>${row.po || ""}</td>
-        <td>${row.item || ""}</td>
-        <td>${row.qty || ""}</td>
-        <td>${row.description || ""}</td>
-        <td>${row.lineId || ""}</td>
-      `;
-      body.appendChild(tr);
-    });
-
-    const today = todayKey();
-    const worker = $("workerName").value.trim();
-
-    const todayRows = state.checks.filter(row => row.date === today);
-    const workerRows = worker
-      ? todayRows.filter(row => row.worker.toLowerCase() === worker.toLowerCase())
-      : [];
-
-    $("todayTotal").textContent = todayRows.length;
-    $("workerTotal").textContent = worker ? workerRows.length : 0;
+    alert(`Added ${added} bulk label(s). Skipped ${skipped}.`);
   }
 
   function parseScanData(raw) {
     const clean = raw.trim();
-    if (!clean) throw new Error("Nothing was scanned.");
+
+    if (!clean) {
+      throw new Error("Nothing was scanned.");
+    }
 
     const data = JSON.parse(clean);
 
@@ -175,8 +170,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function markChecked(data) {
     const worker = $("workerName").value.trim() || "Unknown Worker";
 
-    if (state.checks.some(row => row.lineId === data.lineId)) {
-      alert("This line was already checked.");
+    const alreadyChecked = state.checks.some((row) => row.lineId === data.lineId);
+
+    if (alreadyChecked) {
+      alert("This line was already checked. No duplicate count added.");
       return;
     }
 
@@ -188,7 +185,8 @@ document.addEventListener("DOMContentLoaded", () => {
       po: data.po || "",
       item: data.item || "",
       qty: data.qty || "",
-      description: data.description || ""
+      description: data.description || "",
+      location: data.location || ""
     });
 
     save();
@@ -196,10 +194,55 @@ document.addEventListener("DOMContentLoaded", () => {
     $("scanInput").value = "";
   }
 
-  function exportCsv() {
-    const headers = ["Checked At", "Date", "Worker", "PO/Transfer", "Item", "Qty", "Description", "Line ID"];
+  function renderLog() {
+    const body = $("checkLogBody");
+    if (!body) return;
 
-    const rows = state.checks.map(r => [
+    body.innerHTML = "";
+
+    state.checks.forEach((row) => {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${new Date(row.checkedAt).toLocaleString()}</td>
+        <td>${escapeHtml(row.worker)}</td>
+        <td>${escapeHtml(row.po)}</td>
+        <td>${escapeHtml(row.item)}</td>
+        <td>${escapeHtml(row.qty)}</td>
+        <td>${escapeHtml(row.description)}</td>
+        <td>${escapeHtml(row.location || "")}</td>
+        <td>${escapeHtml(row.lineId)}</td>
+      `;
+
+      body.appendChild(tr);
+    });
+
+    const today = todayKey();
+    const worker = $("workerName").value.trim();
+
+    const todayRows = state.checks.filter((row) => row.date === today);
+    const workerRows = worker
+      ? todayRows.filter((row) => row.worker.toLowerCase() === worker.toLowerCase())
+      : [];
+
+    $("todayTotal").textContent = todayRows.length;
+    $("workerTotal").textContent = worker ? workerRows.length : 0;
+  }
+
+  function exportCsv() {
+    const headers = [
+      "Checked At",
+      "Date",
+      "Worker",
+      "PO/Transfer",
+      "Item",
+      "Qty",
+      "Description",
+      "Location",
+      "Line ID"
+    ];
+
+    const rows = state.checks.map((r) => [
       new Date(r.checkedAt).toLocaleString(),
       r.date,
       r.worker,
@@ -207,11 +250,14 @@ document.addEventListener("DOMContentLoaded", () => {
       r.item,
       r.qty,
       r.description,
+      r.location || "",
       r.lineId
     ]);
 
     const csv = [headers, ...rows]
-      .map(row => row.map(cell => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(","))
+      .map((row) =>
+        row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")
+      )
       .join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -225,12 +271,140 @@ document.addEventListener("DOMContentLoaded", () => {
     URL.revokeObjectURL(url);
   }
 
+  function cleanKey(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  function pickValue(row, possibleNames) {
+    const keys = Object.keys(row);
+
+    for (const name of possibleNames) {
+      const target = cleanKey(name);
+      const foundKey = keys.find((key) => cleanKey(key) === target);
+      if (foundKey) return row[foundKey];
+    }
+
+    return "";
+  }
+
+  function normalizePoRow(row) {
+    return {
+      po: String(
+        pickValue(row, [
+          "PO",
+          "PO #",
+          "PO Number",
+          "Purchase Order",
+          "Transfer",
+          "Transfer #",
+          "Transfer Number"
+        ]) || ""
+      ).trim(),
+
+      item: String(
+        pickValue(row, [
+          "Item",
+          "Item #",
+          "Item Number",
+          "SKU",
+          "Part Number",
+          "Product Number"
+        ]) || ""
+      ).trim(),
+
+      qty: String(
+        pickValue(row, [
+          "Qty",
+          "Quantity",
+          "QTY Received",
+          "Received Qty",
+          "Order Qty",
+          "Ordered Qty"
+        ]) || ""
+      ).trim(),
+
+      description: String(
+        pickValue(row, [
+          "Description",
+          "Item Description",
+          "Desc",
+          "Product Description"
+        ]) || ""
+      ).trim(),
+
+      location: String(
+        pickValue(row, [
+          "Location",
+          "Bin",
+          "Bin Location",
+          "Loc",
+          "Putaway Location",
+          "Primary Location"
+        ]) || ""
+      ).trim()
+    };
+  }
+
+  async function readPoFile() {
+    const fileInput = $("poFileInput");
+    const file = fileInput?.files?.[0];
+
+    if (!file) {
+      alert("Choose a CSV or Excel file first.");
+      return [];
+    }
+
+    if (!window.XLSX) {
+      alert("Excel/CSV reader failed to load. Check internet connection.");
+      return [];
+    }
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    return rawRows
+      .map(normalizePoRow)
+      .filter((row) => row.po || row.item || row.qty || row.description || row.location);
+  }
+
+  function renderPoPreview(rows) {
+    const body = $("poPreviewBody");
+    const summary = $("importSummary");
+
+    if (!body) return;
+
+    body.innerHTML = "";
+
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${escapeHtml(row.po)}</td>
+        <td>${escapeHtml(row.item)}</td>
+        <td>${escapeHtml(row.qty)}</td>
+        <td>${escapeHtml(row.description)}</td>
+        <td>${escapeHtml(row.location)}</td>
+      `;
+
+      body.appendChild(tr);
+    });
+
+    if (summary) {
+      summary.textContent = `${rows.length} PO line(s) ready to import.`;
+    }
+  }
+
   $("addLabelBtn")?.addEventListener("click", () => {
     addLabel({
       po: $("poNumber").value.trim(),
       item: $("itemNumber").value.trim(),
       qty: $("quantity").value.trim(),
       description: $("description").value.trim(),
+      location: $("location").value.trim(),
       copies: $("labelCopies").value
     });
   });
@@ -239,22 +413,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("checkLineBtn")?.addEventListener("click", () => {
     try {
-      markChecked(parseScanData($("scanInput").value));
+      const data = parseScanData($("scanInput").value);
+      markChecked(data);
     } catch (err) {
       alert("QR data was not readable. Scan again.");
     }
   });
 
   $("printLabelsBtn")?.addEventListener("click", () => {
-  const labels = document.querySelectorAll(".zebra-label");
+    const labels = document.querySelectorAll(".zebra-label");
 
-  if (!labels.length) {
-    alert("Add at least one label before printing.");
-    return;
-  }
+    if (!labels.length) {
+      alert("Add at least one label before printing.");
+      return;
+    }
 
-  window.print();
-});
+    window.print();
+  });
 
   $("clearLabelsBtn")?.addEventListener("click", () => {
     if (confirm("Clear all printable labels?")) {
@@ -265,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("resetChecksBtn")?.addEventListener("click", () => {
-    if (confirm("Reset all checked line history?")) {
+    if (confirm("Reset all checked line history on this device?")) {
       state.checks = [];
       save();
       renderLog();
@@ -273,7 +448,77 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("exportCsvBtn")?.addEventListener("click", exportCsv);
+
   $("workerName")?.addEventListener("input", renderLog);
+
+  $("previewPoBtn")?.addEventListener("click", async () => {
+    try {
+      importedPoRows = await readPoFile();
+      renderPoPreview(importedPoRows);
+    } catch (err) {
+      console.error(err);
+      alert("Could not read this file. Make sure it is CSV, XLS, or XLSX.");
+    }
+  });
+
+  $("importPoBtn")?.addEventListener("click", async () => {
+    try {
+      if (!importedPoRows.length) {
+        importedPoRows = await readPoFile();
+      }
+
+      if (!importedPoRows.length) {
+        alert("No PO lines found.");
+        return;
+      }
+
+      let added = 0;
+      let skipped = 0;
+
+      importedPoRows.forEach((row) => {
+        if (!row.po || !row.item) {
+          skipped++;
+          return;
+        }
+
+        const duplicate = state.labels.some((label) =>
+          String(label.po).toLowerCase() === row.po.toLowerCase() &&
+          String(label.item).toLowerCase() === row.item.toLowerCase() &&
+          String(label.location || "").toLowerCase() === row.location.toLowerCase()
+        );
+
+        if (duplicate) {
+          skipped++;
+          return;
+        }
+
+        state.labels.push({
+          lineId: makeLineId(row.po, row.item, row.location),
+          po: row.po,
+          item: row.item,
+          qty: row.qty,
+          description: row.description,
+          location: row.location,
+          createdAt: new Date().toISOString()
+        });
+
+        added++;
+      });
+
+      save();
+      renderLabels();
+
+      const summary = $("importSummary");
+      if (summary) {
+        summary.textContent = `Imported ${added} label(s). Skipped ${skipped}.`;
+      }
+
+      alert(`Imported ${added} label(s). Skipped ${skipped}.`);
+    } catch (err) {
+      console.error(err);
+      alert("Import failed. Check the file columns and try again.");
+    }
+  });
 
   renderLabels();
   renderLog();
