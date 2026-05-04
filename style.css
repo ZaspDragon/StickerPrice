@@ -8,7 +8,6 @@
   --ink: #172033;
   --muted: #667085;
   --blue: #1457d9;
-  --blue-dark: #0d3f9e;
   --line: #d8dee9;
   --danger: #c03535;
 }
@@ -59,7 +58,8 @@ body {
   margin: 18px;
 }
 
-h2, h3 {
+h2,
+h3 {
   margin-top: 0;
 }
 
@@ -81,7 +81,8 @@ label {
   font-size: 14px;
 }
 
-input, textarea {
+input,
+textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -172,6 +173,7 @@ button:hover {
   padding: 8px;
   overflow: hidden;
   page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .label-left {
@@ -211,7 +213,8 @@ table {
   font-size: 14px;
 }
 
-th, td {
+th,
+td {
   border-bottom: 1px solid var(--line);
   text-align: left;
   padding: 10px;
@@ -223,7 +226,8 @@ th {
 }
 
 @media (max-width: 800px) {
-  .topbar, .layout {
+  .topbar,
+  .layout {
     display: block;
   }
 
@@ -232,7 +236,8 @@ th {
     width: 100%;
   }
 
-  .card, .wide {
+  .card,
+  .wide {
     margin: 14px;
   }
 
@@ -241,35 +246,68 @@ th {
   }
 }
 
+/* REAL ZEBRA PRINT FIX */
 @media print {
+  html,
   body {
-    background: white;
+    width: 4in;
+    height: 2in;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
   }
 
-  .topbar,
-  .layout,
-  .wide:not(:has(.label-sheet)),
-  .hint,
-  h2 {
-    display: none !important;
+  body * {
+    visibility: hidden !important;
   }
 
-  .card {
-    border: 0;
-    box-shadow: none;
-    padding: 0;
-    margin: 0;
+  #labelSheet,
+  #labelSheet * {
+    visibility: visible !important;
   }
 
-  .label-sheet {
-    display: block;
+  #labelSheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    display: block !important;
+    width: 4in !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .zebra-label {
-    border: none;
-    margin: 0;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    width: 4in !important;
+    height: 2in !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0.1in !important;
+    display: grid !important;
+    grid-template-columns: 1.15in 1fr !important;
+    gap: 0.08in !important;
+    background: white !important;
+    color: black !important;
+    overflow: hidden !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .qr {
+    width: 1in !important;
+    height: 1in !important;
+  }
+
+  .label-title {
+    font-size: 15px !important;
+    font-weight: 900 !important;
+    border-bottom: 1px solid #111 !important;
+  }
+
+  .label-right {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
   }
 
   @page {
