@@ -199,12 +199,18 @@ button:hover {
   margin-bottom: 4px;
 }
 
-.desc {
+.desc,
+.location {
   display: inline;
 }
 
 .table-wrap {
   overflow: auto;
+}
+
+.small-table {
+  max-height: 260px;
+  margin-top: 12px;
 }
 
 table {
@@ -246,7 +252,6 @@ th {
   }
 }
 
-/* REAL ZEBRA PRINT FIX */
 @media print {
   html,
   body {
@@ -299,15 +304,15 @@ th {
     height: 1in !important;
   }
 
+  .label-right {
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+  }
+
   .label-title {
     font-size: 15px !important;
     font-weight: 900 !important;
     border-bottom: 1px solid #111 !important;
-  }
-
-  .label-right {
-    font-size: 12px !important;
-    line-height: 1.25 !important;
   }
 
   @page {
