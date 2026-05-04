@@ -82,7 +82,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -197,11 +198,6 @@ button:hover {
   font-weight: 900;
   border-bottom: 1px solid #111;
   margin-bottom: 4px;
-}
-
-.desc,
-.location {
-  display: inline;
 }
 
 .table-wrap {
