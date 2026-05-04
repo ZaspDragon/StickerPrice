@@ -22,15 +22,23 @@
   <main class="layout">
     <section class="card">
       <h2>Create Zebra Stickers</h2>
-      <p class="hint">Add one receiving/check line at a time, paste lines, or upload a PO file.</p>
 
       <div class="grid">
         <label>Worker Name
           <input id="workerName" placeholder="Angel Quincel" />
         </label>
 
-        <label>PO / Transfer #
-          <input id="poNumber" placeholder="PO237555" />
+        <label>Document Type
+          <select id="docType">
+            <option value="PO">PO</option>
+            <option value="SPO">SPO</option>
+            <option value="SXFR">SXFR</option>
+            <option value="XFR">XFR</option>
+          </select>
+        </label>
+
+        <label>Document #
+          <input id="poNumber" placeholder="237555" />
         </label>
 
         <label>Item #
@@ -62,20 +70,29 @@
       <hr />
 
       <h3>Bulk Paste</h3>
-      <p class="hint">Format: PO, Item, Qty, Description, Location — one line per sticker.</p>
-      <textarea id="bulkText" rows="6" placeholder="PO237555, 601535, 32, 36 by 48 blinds, A12-03"></textarea>
+      <p class="hint">Format: Type, Doc #, Item, Qty, Description, Location</p>
+      <textarea id="bulkText" rows="6" placeholder="PO, 237555, 601535, 32, 36 by 48 blinds, A12-03"></textarea>
       <button id="bulkAddBtn">Add Bulk Labels</button>
 
       <hr />
 
-      <h3>Upload PO / Transfer File</h3>
-      <p class="hint">Upload CSV, XLS, or XLSX files with PO, item, qty, description, and location columns.</p>
+      <h3>Upload PO / SPO / SXFR / XFR File</h3>
+      <p class="hint">Upload CSV, XLS, or XLSX. The app will try to detect document type, document number, item, qty, description, and location.</p>
+
+      <label>Default Upload Document Type
+        <select id="defaultDocType">
+          <option value="PO">PO</option>
+          <option value="SPO">SPO</option>
+          <option value="SXFR">SXFR</option>
+          <option value="XFR">XFR</option>
+        </select>
+      </label>
 
       <input id="poFileInput" type="file" accept=".csv,.xlsx,.xls" />
 
       <div class="actions">
-        <button id="previewPoBtn">Preview PO File</button>
-        <button id="importPoBtn" class="primary">Import PO Lines</button>
+        <button id="previewPoBtn">Preview File</button>
+        <button id="importPoBtn" class="primary">Import Lines</button>
       </div>
 
       <div id="importSummary" class="hint"></div>
@@ -84,7 +101,8 @@
         <table>
           <thead>
             <tr>
-              <th>PO</th>
+              <th>Type</th>
+              <th>Doc #</th>
               <th>Item</th>
               <th>Qty</th>
               <th>Description</th>
@@ -98,7 +116,7 @@
 
     <section class="card">
       <h2>Check Line</h2>
-      <p class="hint">Scan the QR code with your phone camera or a USB scanner. It will count the line once.</p>
+      <p class="hint">Scan the QR code with a phone camera or USB scanner. It will count the line once.</p>
 
       <label>Scan / Paste QR Data
         <textarea id="scanInput" rows="5" placeholder="Scan QR here..."></textarea>
@@ -138,7 +156,8 @@
           <tr>
             <th>Date/Time</th>
             <th>Worker</th>
-            <th>PO/Transfer</th>
+            <th>Type</th>
+            <th>Doc #</th>
             <th>Item</th>
             <th>Qty</th>
             <th>Description</th>
@@ -159,7 +178,8 @@
 
       <div class="label-right">
         <div class="label-title">LINE CHECK</div>
-        <div><b>PO:</b> <span class="po"></span></div>
+        <div><b>Type:</b> <span class="docTypeText"></span></div>
+        <div><b>Doc:</b> <span class="docNumber"></span></div>
         <div><b>Item:</b> <span class="item"></span></div>
         <div><b>Qty:</b> <span class="qty"></span></div>
         <div><b>Desc:</b> <span class="desc"></span></div>
