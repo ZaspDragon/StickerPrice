@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     checks: JSON.parse(localStorage.getItem("lineChecks") || "[]")
   };
 
-  let importedPoRows = [];
+  let importedRows = [];
 
   function save() {
     localStorage.setItem("lineLabels", JSON.stringify(state.labels));
@@ -17,12 +17,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return date.toISOString().slice(0, 10);
   }
 
-  function makeLineId(po, item, location = "") {
+  function cleanText(value) {
+    return String(value || "").trim();
+  }
+
+  function makeLineId(docType, docNumber, item, location = "") {
     const stamp = Date.now().toString(36).toUpperCase();
-    const safePo = String(po || "NOPO").replace(/\s+/g, "");
-    const safeItem = String(item || "NOITEM").replace(/\s+/g, "");
-    const safeLoc = String(location || "").replace(/\s+/g, "");
-    return `${safePo}-${safeItem}-${safeLoc}-${stamp}`;
+    return `${docType || "DOC"}-${docNumber || "NODOC"}-${item || "NOITEM"}-${location || "NOLOC"}-${stamp}`
+      .replace(/\s+/g, "")
+      .toUpperCase();
   }
 
   function escapeHtml(value) {
@@ -38,7 +41,8 @@ document.addEventListener("DOMContentLoaded", () => {
     return JSON.stringify({
       type: "line_check",
       lineId: label.lineId,
-      po: label.po,
+      docType: label.docType,
+      docNumber: label.docNumber,
       item: label.item,
       qty: label.qty,
       description: label.description,
@@ -47,18 +51,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function addLabel({ po, item, qty, description, location, copies = 1 }) {
+  function addLabel({ docType, docNumber, item, qty, description, location, copies = 1 }) {
     copies = Math.max(1, Number(copies) || 1);
 
-    if (!po || !item) {
-      alert("Enter at least PO / Transfer # and Item #.");
+    if (!docNumber || !item) {
+      alert("Enter at least Document # and Item #.");
       return;
     }
 
     for (let i = 0; i < copies; i++) {
       state.labels.push({
-        lineId: makeLineId(po, item, location),
-        po,
+        lineId: makeLineId(docType, docNumber, item, location),
+        docType,
+        docNumber,
         item,
         qty,
         description,
@@ -83,14 +88,12 @@ document.addEventListener("DOMContentLoaded", () => {
     state.labels.forEach((label) => {
       const node = template.content.cloneNode(true);
 
-      node.querySelector(".po").textContent = label.po || "";
+      node.querySelector(".docTypeText").textContent = label.docType || "";
+      node.querySelector(".docNumber").textContent = label.docNumber || "";
       node.querySelector(".item").textContent = label.item || "";
       node.querySelector(".qty").textContent = label.qty || "";
       node.querySelector(".desc").textContent = label.description || "";
-
-      const locEl = node.querySelector(".location");
-      if (locEl) locEl.textContent = label.location || "";
-
+      node.querySelector(".location").textContent = label.location || "";
       node.querySelector(".lineid").textContent = label.lineId || "";
 
       const canvas = node.querySelector(".qr");
@@ -124,20 +127,39 @@ document.addEventListener("DOMContentLoaded", () => {
     let skipped = 0;
 
     lines.forEach((line) => {
-      const [po, item, qty, description, location] = line.split(",");
+      const parts = line.split(",").map((x) => x.trim());
 
-      if (!po || !item) {
+      let docType = parts[0] || $("docType").value || "PO";
+      let docNumber = parts[1] || "";
+      let item = parts[2] || "";
+      let qty = parts[3] || "";
+      let description = parts[4] || "";
+      let location = parts[5] || "";
+
+      docType = docType.toUpperCase();
+
+      if (!["PO", "SPO", "SXFR", "XFR"].includes(docType)) {
+        location = description;
+        description = qty;
+        qty = item;
+        item = docNumber;
+        docNumber = docType;
+        docType = $("docType").value || "PO";
+      }
+
+      if (!docNumber || !item) {
         skipped++;
         return;
       }
 
       state.labels.push({
-        lineId: makeLineId(po.trim(), item.trim(), location?.trim() || ""),
-        po: po.trim(),
-        item: item.trim(),
-        qty: (qty || "").trim(),
-        description: (description || "").trim(),
-        location: (location || "").trim(),
+        lineId: makeLineId(docType, docNumber, item, location),
+        docType,
+        docNumber,
+        item,
+        qty,
+        description,
+        location,
         createdAt: new Date().toISOString()
       });
 
@@ -153,10 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function parseScanData(raw) {
     const clean = raw.trim();
-
-    if (!clean) {
-      throw new Error("Nothing was scanned.");
-    }
+    if (!clean) throw new Error("Nothing was scanned.");
 
     const data = JSON.parse(clean);
 
@@ -170,9 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function markChecked(data) {
     const worker = $("workerName").value.trim() || "Unknown Worker";
 
-    const alreadyChecked = state.checks.some((row) => row.lineId === data.lineId);
-
-    if (alreadyChecked) {
+    if (state.checks.some((row) => row.lineId === data.lineId)) {
       alert("This line was already checked. No duplicate count added.");
       return;
     }
@@ -182,7 +199,8 @@ document.addEventListener("DOMContentLoaded", () => {
       date: todayKey(),
       worker,
       lineId: data.lineId,
-      po: data.po || "",
+      docType: data.docType || "",
+      docNumber: data.docNumber || "",
       item: data.item || "",
       qty: data.qty || "",
       description: data.description || "",
@@ -206,7 +224,8 @@ document.addEventListener("DOMContentLoaded", () => {
       tr.innerHTML = `
         <td>${new Date(row.checkedAt).toLocaleString()}</td>
         <td>${escapeHtml(row.worker)}</td>
-        <td>${escapeHtml(row.po)}</td>
+        <td>${escapeHtml(row.docType)}</td>
+        <td>${escapeHtml(row.docNumber)}</td>
         <td>${escapeHtml(row.item)}</td>
         <td>${escapeHtml(row.qty)}</td>
         <td>${escapeHtml(row.description)}</td>
@@ -234,7 +253,8 @@ document.addEventListener("DOMContentLoaded", () => {
       "Checked At",
       "Date",
       "Worker",
-      "PO/Transfer",
+      "Type",
+      "Document Number",
       "Item",
       "Qty",
       "Description",
@@ -246,7 +266,8 @@ document.addEventListener("DOMContentLoaded", () => {
       new Date(r.checkedAt).toLocaleString(),
       r.date,
       r.worker,
-      r.po,
+      r.docType,
+      r.docNumber,
       r.item,
       r.qty,
       r.description,
@@ -289,65 +310,116 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   }
 
-  function normalizePoRow(row) {
-    return {
-      po: String(
-        pickValue(row, [
-          "PO",
-          "PO #",
-          "PO Number",
-          "Purchase Order",
-          "Transfer",
-          "Transfer #",
-          "Transfer Number"
-        ]) || ""
-      ).trim(),
+  function detectDocType(row, docNumber) {
+    const defaultDocType = $("defaultDocType")?.value || "PO";
 
-      item: String(
+    const directType = cleanText(
+      pickValue(row, [
+        "Type",
+        "Doc Type",
+        "Document Type",
+        "Order Type",
+        "Transfer Type"
+      ])
+    ).toUpperCase();
+
+    if (["PO", "SPO", "SXFR", "XFR"].includes(directType)) {
+      return directType;
+    }
+
+    const docString = cleanText(docNumber).toUpperCase();
+
+    if (docString.startsWith("SPO")) return "SPO";
+    if (docString.startsWith("SXFR")) return "SXFR";
+    if (docString.startsWith("XFR")) return "XFR";
+    if (docString.startsWith("PO")) return "PO";
+
+    return defaultDocType;
+  }
+
+  function normalizeUploadedRow(row) {
+    const docNumber = cleanText(
+      pickValue(row, [
+        "PO",
+        "PO #",
+        "PO Number",
+        "Purchase Order",
+        "SPO",
+        "SPO #",
+        "SPO Number",
+        "SXFR",
+        "SXFR #",
+        "SXFR Number",
+        "XFR",
+        "XFR #",
+        "XFR Number",
+        "Transfer",
+        "Transfer #",
+        "Transfer Number",
+        "Document",
+        "Document #",
+        "Document Number",
+        "Order Number",
+        "Order #",
+        "Receipt Number",
+        "Reference Number"
+      ])
+    );
+
+    const docType = detectDocType(row, docNumber);
+
+    return {
+      docType,
+      docNumber,
+      item: cleanText(
         pickValue(row, [
           "Item",
           "Item #",
           "Item Number",
           "SKU",
           "Part Number",
-          "Product Number"
-        ]) || ""
-      ).trim(),
-
-      qty: String(
+          "Product Number",
+          "Item ID"
+        ])
+      ),
+      qty: cleanText(
         pickValue(row, [
           "Qty",
           "Quantity",
           "QTY Received",
           "Received Qty",
           "Order Qty",
-          "Ordered Qty"
-        ]) || ""
-      ).trim(),
-
-      description: String(
+          "Ordered Qty",
+          "Qty Ordered",
+          "Qty To Receive",
+          "QTY To Receive"
+        ])
+      ),
+      description: cleanText(
         pickValue(row, [
           "Description",
           "Item Description",
           "Desc",
-          "Product Description"
-        ]) || ""
-      ).trim(),
-
-      location: String(
+          "Product Description",
+          "Item Desc"
+        ])
+      ),
+      location: cleanText(
         pickValue(row, [
           "Location",
           "Bin",
           "Bin Location",
           "Loc",
           "Putaway Location",
-          "Primary Location"
-        ]) || ""
-      ).trim()
+          "Primary Location",
+          "To Bin",
+          "From Bin"
+        ])
+      )
     };
   }
 
-  async function readPoFile() {
+  async function readUploadedFile() {
     const fileInput = $("poFileInput");
     const file = fileInput?.files?.[0];
 
@@ -367,11 +439,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
     return rawRows
-      .map(normalizePoRow)
-      .filter((row) => row.po || row.item || row.qty || row.description || row.location);
+      .map(normalizeUploadedRow)
+      .filter((row) => row.docNumber || row.item || row.qty || row.description || row.location);
   }
 
-  function renderPoPreview(rows) {
+  function renderUploadPreview(rows) {
     const body = $("poPreviewBody");
     const summary = $("importSummary");
 
@@ -383,7 +455,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const tr = document.createElement("tr");
 
       tr.innerHTML = `
-        <td>${escapeHtml(row.po)}</td>
+        <td>${escapeHtml(row.docType)}</td>
+        <td>${escapeHtml(row.docNumber)}</td>
         <td>${escapeHtml(row.item)}</td>
         <td>${escapeHtml(row.qty)}</td>
         <td>${escapeHtml(row.description)}</td>
@@ -394,13 +467,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (summary) {
-      summary.textContent = `${rows.length} PO line(s) ready to import.`;
+      summary.textContent = `${rows.length} line(s) ready to import.`;
     }
   }
 
   $("addLabelBtn")?.addEventListener("click", () => {
     addLabel({
-      po: $("poNumber").value.trim(),
+      docType: $("docType").value,
+      docNumber: $("poNumber").value.trim(),
       item: $("itemNumber").value.trim(),
       qty: $("quantity").value.trim(),
       description: $("description").value.trim(),
@@ -413,8 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("checkLineBtn")?.addEventListener("click", () => {
     try {
-      const data = parseScanData($("scanInput").value);
-      markChecked(data);
+      markChecked(parseScanData($("scanInput").value));
     } catch (err) {
       alert("QR data was not readable. Scan again.");
     }
@@ -448,13 +521,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("exportCsvBtn")?.addEventListener("click", exportCsv);
-
   $("workerName")?.addEventListener("input", renderLog);
 
   $("previewPoBtn")?.addEventListener("click", async () => {
     try {
-      importedPoRows = await readPoFile();
-      renderPoPreview(importedPoRows);
+      importedRows = await readUploadedFile();
+      renderUploadPreview(importedRows);
     } catch (err) {
       console.error(err);
       alert("Could not read this file. Make sure it is CSV, XLS, or XLSX.");
@@ -463,26 +535,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("importPoBtn")?.addEventListener("click", async () => {
     try {
-      if (!importedPoRows.length) {
-        importedPoRows = await readPoFile();
+      if (!importedRows.length) {
+        importedRows = await readUploadedFile();
       }
 
-      if (!importedPoRows.length) {
-        alert("No PO lines found.");
+      if (!importedRows.length) {
+        alert("No lines found.");
         return;
       }
 
       let added = 0;
       let skipped = 0;
 
-      importedPoRows.forEach((row) => {
-        if (!row.po || !row.item) {
+      importedRows.forEach((row) => {
+        if (!row.docNumber || !row.item) {
           skipped++;
           return;
         }
 
         const duplicate = state.labels.some((label) =>
-          String(label.po).toLowerCase() === row.po.toLowerCase() &&
+          String(label.docType).toLowerCase() === row.docType.toLowerCase() &&
+          String(label.docNumber).toLowerCase() === row.docNumber.toLowerCase() &&
           String(label.item).toLowerCase() === row.item.toLowerCase() &&
           String(label.location || "").toLowerCase() === row.location.toLowerCase()
         );
@@ -493,8 +566,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         state.labels.push({
-          lineId: makeLineId(row.po, row.item, row.location),
-          po: row.po,
+          lineId: makeLineId(row.docType, row.docNumber, row.item, row.location),
+          docType: row.docType,
+          docNumber: row.docNumber,
           item: row.item,
           qty: row.qty,
           description: row.description,
