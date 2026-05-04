@@ -59,7 +59,34 @@
       <textarea id="bulkText" rows="6" placeholder="PO237555, 601535, 32, 36 by 48 blinds"></textarea>
       <button id="bulkAddBtn">Add Bulk Labels</button>
     </section>
+    <hr />
 
+<h3>Upload PO / Transfer File</h3>
+<p class="hint">Upload a CSV or Excel file with PO, item, qty, description, and location columns.</p>
+
+<input id="poFileInput" type="file" accept=".csv,.xlsx,.xls" />
+
+<div class="actions">
+  <button id="previewPoBtn">Preview PO File</button>
+  <button id="importPoBtn" class="primary">Import PO Lines</button>
+</div>
+
+<div id="importSummary" class="hint"></div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>PO</th>
+        <th>Item</th>
+        <th>Qty</th>
+        <th>Description</th>
+        <th>Location</th>
+      </tr>
+    </thead>
+    <tbody id="poPreviewBody"></tbody>
+  </table>
+</div>
     <section class="card">
       <h2>Check Line</h2>
       <p class="hint">Scan the QR code with your phone camera or a USB scanner. It will count the line once.</p>
