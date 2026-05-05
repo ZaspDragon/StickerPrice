@@ -19,6 +19,10 @@ body {
   color: var(--ink);
 }
 
+/* ===================== */
+/* HEADER */
+/* ===================== */
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -38,6 +42,10 @@ body {
   margin: 6px 0 0;
   color: #d7e2ff;
 }
+
+/* ===================== */
+/* LAYOUT */
+/* ===================== */
 
 .layout {
   display: grid;
@@ -68,6 +76,10 @@ h3 {
   font-size: 14px;
 }
 
+/* ===================== */
+/* FORM */
+/* ===================== */
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -95,6 +107,10 @@ select {
 textarea {
   resize: vertical;
 }
+
+/* ===================== */
+/* BUTTONS */
+/* ===================== */
 
 button {
   border: 0;
@@ -131,6 +147,10 @@ button:hover {
   margin-top: 14px;
 }
 
+/* ===================== */
+/* STATS */
+/* ===================== */
+
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -155,17 +175,21 @@ button:hover {
   font-size: 13px;
 }
 
+/* ===================== */
+/* LABEL DISPLAY (SCREEN) */
+/* ===================== */
+
 .label-sheet {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4in, 1fr));
+  gap: 12px;
+  justify-content: center;
 }
 
 .zebra-label {
   width: 4in;
   height: 2in;
-  border: 1px dashed #222;
+  border: 1px solid #222;
   background: white;
   color: black;
   display: grid;
@@ -173,8 +197,6 @@ button:hover {
   gap: 8px;
   padding: 8px;
   overflow: hidden;
-  page-break-inside: avoid;
-  break-inside: avoid;
 }
 
 .label-left {
@@ -199,6 +221,10 @@ button:hover {
   border-bottom: 1px solid #111;
   margin-bottom: 4px;
 }
+
+/* ===================== */
+/* TABLE */
+/* ===================== */
 
 .table-wrap {
   overflow: auto;
@@ -227,6 +253,10 @@ th {
   background: #f8fafc;
 }
 
+/* ===================== */
+/* MOBILE */
+/* ===================== */
+
 @media (max-width: 800px) {
   .topbar,
   .layout {
@@ -248,51 +278,42 @@ th {
   }
 }
 
-@media print {
-  html,
-  body {
-    width: 4in;
-    height: 2in;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: white !important;
-  }
+/* ===================== */
+/* PRINT (MULTIPLE LABELS PER PAGE) */
+/* ===================== */
 
+@media print {
   body * {
-    visibility: hidden !important;
+    visibility: hidden;
   }
 
   #labelSheet,
   #labelSheet * {
-    visibility: visible !important;
+    visibility: visible;
   }
 
   #labelSheet {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    display: block !important;
-    width: 4in !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, 4in);
+    grid-auto-rows: 2in;
+    gap: 0.15in;
+    padding: 0.25in;
   }
 
   .zebra-label {
-    width: 4in !important;
-    height: 2in !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 0.1in !important;
-    display: grid !important;
-    grid-template-columns: 1.15in 1fr !important;
-    gap: 0.08in !important;
-    background: white !important;
-    color: black !important;
-    overflow: hidden !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    width: 4in;
+    height: 2in;
+    border: 1px solid black;
+    padding: 0.1in;
+    margin: 0;
+    background: white;
+    color: black;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   .qr {
@@ -301,18 +322,18 @@ th {
   }
 
   .label-right {
-    font-size: 12px !important;
-    line-height: 1.25 !important;
+    font-size: 12px;
+    line-height: 1.25;
   }
 
   .label-title {
-    font-size: 15px !important;
-    font-weight: 900 !important;
-    border-bottom: 1px solid #111 !important;
+    font-size: 15px;
+    font-weight: 900;
+    border-bottom: 1px solid #111;
   }
 
   @page {
-    size: 4in 2in;
-    margin: 0;
+    size: letter;
+    margin: 0.25in;
   }
 }
