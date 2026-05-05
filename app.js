@@ -155,7 +155,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     return number;
   }
+function extractFileMeta(rows) {
+  let docNumber = "";
+  let branch = "";
 
+  const text = rows
+    .slice(0, 20)
+    .map((row) => row.join(" "))
+    .join(" ")
+    .toUpperCase();
+
+  const docMatch = text.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?)\s*[:\-]?\s*(SPO\d+|PO\d+|SXFR\d+|XFR\d+)\b/i);
+  if (docMatch) docNumber = docMatch[2].toUpperCase();
+
+  const branchMatch = text.match(/\bBRANCH\s*[-:]\s*([A-Z]{2}\d{2})\b/i);
+  if (branchMatch) branch = branchMatch[1].toUpperCase();
+
+  return { docNumber, branch };
+}
   function normalizeUploadedRow(row) {
     let docNumber = cleanText(
       pickValue(row, [
