@@ -173,7 +173,7 @@ function extractFileMeta(rows) {
 
   return { docNumber, branch };
 }
-  function normalizeUploadedRow(row) {
+  function normalizeUploadedRow(row, fileMeta = {}) { {
     let docNumber = cleanText(
       pickValue(row, [
         "P.O.#",
