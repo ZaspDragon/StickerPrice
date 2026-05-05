@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sticker Price / Line Check</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Line Check Counter / Zebra QR Labels</h1>
+      <p>Create labels manually, bulk paste lines, or import PO / SPO / SXFR / XFR files.</p>
+    </div>
+    <button id="printLabelsBtn" class="primary">Print Labels</button>
+  </header>
+
+  <main>
+    <section class="layout">
+      <div class="card">
+        <h2>Add Sticker Manually</h2>
+        <p class="hint">Use this when you want to create one label yourself.</p>
+        <div class="grid">
+          <label>Type
+            <select id="docType"><option value="PO">PO</option><option value="SPO" selected>SPO</option><option value="SXFR">SXFR</option><option value="XFR">XFR</option></select>
+          </label>
+          <label>Document #<input id="poNumber" placeholder="Example: SPO0216419" /></label>
+          <label>Branch<input id="branch" placeholder="Example: OH01" /></label>
+          <label>Item #<input id="itemNumber" placeholder="Example: 606531" /></label>
+          <label>Qty<input id="quantity" placeholder="Example: 24" /></label>
+          <label>Description<input id="description" placeholder="Optional" /></label>
+          <label>Location<input id="location" placeholder="Example: B-20-2" /></label>
+          <label>Copies<input id="labelCopies" type="number" value="1" min="1" /></label>
+        </div>
+        <div class="actions"><button id="addLabelBtn" class="primary">Add Label</button><button id="clearLabelsBtn" class="danger">Clear Printable Labels</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Bulk Paste Labels</h2>
+        <p class="hint">Paste one line per label. Format: Type, Document #, Branch, Item #, Qty, Description, Location</p>
+        <textarea id="bulkText" rows="9" placeholder="SPO,SPO0216419,OH01,606531,20,Widget,B-20-2"></textarea>
+        <div class="actions"><button id="bulkAddBtn" class="primary">Add Bulk Labels</button></div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>Import from File</h2>
+      <p class="hint">Upload CSV, XLS, or XLSX. The app will try to detect document number, branch, item, quantity, description, and location.</p>
+      <div class="grid">
+        <label>Default Upload Type
+          <select id="defaultDocType"><option value="PO">PO</option><option value="SPO" selected>SPO</option><option value="SXFR">SXFR</option><option value="XFR">XFR</option></select>
+        </label>
+        <label>Default Branch<input id="defaultBranch" placeholder="Example: OH01" /></label>
+        <label>Upload File<input id="poFileInput" type="file" accept=".csv,.xls,.xlsx" /></label>
+      </div>
+      <div class="actions"><button id="previewPoBtn" class="primary">Preview File</button><button id="importPoBtn">Import as Labels</button></div>
+      <p id="importSummary">0 line(s) ready to import.</p>
+      <div class="table-wrap small-table"><table><thead><tr><th>Type</th><th>Doc #</th><th>Branch</th><th>Item</th><th>Qty</th><th>Description</th><th>Location</th></tr></thead><tbody id="poPreviewBody"></tbody></table></div>
+    </section>
+
+    <section class="layout">
+      <div class="card">
+        <h2>Scan / Check Line</h2>
+        <p class="hint">Scan the QR label. Phone scans open this app and fill the scan box.</p>
+        <label>Worker Name<input id="workerName" placeholder="Worker name" /></label>
+        <label>Scan Input<textarea id="scanInput" rows="6" placeholder="Scan QR here"></textarea></label>
+        <div class="actions"><button id="checkLineBtn" class="primary">Check Line</button><button id="resetChecksBtn" class="danger">Reset Check History</button></div>
+        <div class="stats"><div><strong id="todayTotal">0</strong><span>Today Total</span></div><div><strong id="workerTotal">0</strong><span>Worker Total</span></div></div>
+      </div>
+      <div class="card">
+        <h2>Checked Line Log</h2>
+        <div class="actions"><button id="exportCsvBtn">Export CSV</button></div>
+        <div class="table-wrap small-table"><table><thead><tr><th>Time</th><th>Worker</th><th>Type</th><th>Doc</th><th>Branch</th><th>Item</th><th>Qty</th><th>Description</th><th>Location</th><th>Line ID</th></tr></thead><tbody id="checkLogBody"></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>Printable Label Sheet</h2>
+      <p class="hint">Labels are sized for 4in x 2in. Print settings can place multiple labels on letter paper.</p>
+      <div id="labelSheet" class="label-sheet"></div>
+      <template id="labelTemplate">
+        <div class="zebra-label">
+          <div class="label-left"><canvas class="qr"></canvas></div>
+          <div class="label-right">
+            <div class="label-title"><div class="poLine">P.O.#: <span class="docNumber"></span></div><div class="branchLine">Branch - <span class="branch"></span></div></div>
+            <div><strong>Type:</strong> <span class="docTypeText"></span></div>
+            <div><strong>Item:</strong> <span class="item"></span></div>
+            <div><strong>Qty:</strong> <span class="qty"></span></div>
+            <div><strong>Desc:</strong> <span class="desc"></span></div>
+            <div><strong>Loc:</strong> <span class="location"></span></div>
+          </div>
+        </div>
+      </template>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
