@@ -18,14 +18,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function cleanText(value) {
-    return String(value || "").trim();
+    return String(value ?? "").trim();
   }
 
-  function makeLineId(docType, docNumber, item, location = "") {
-    const stamp = Date.now().toString(36).toUpperCase();
-    return `${docType || "DOC"}-${docNumber || "NODOC"}-${item || "NOITEM"}-${location || "NOLOC"}-${stamp}`
-      .replace(/\s+/g, "")
-      .toUpperCase();
+  function cleanKey(value) {
+    return String(value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
   }
 
   function escapeHtml(value) {
@@ -35,6 +34,13 @@ document.addEventListener("DOMContentLoaded", () => {
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function makeLineId(docType, docNumber, item, location = "") {
+    const stamp = Date.now().toString(36).toUpperCase();
+    return `${docType || "DOC"}-${docNumber || "NODOC"}-${item || "NOITEM"}-${location || "NOLOC"}-${stamp}`
+      .replace(/\s+/g, "")
+      .toUpperCase();
   }
 
   function labelPayload(label) {
@@ -49,6 +55,289 @@ document.addEventListener("DOMContentLoaded", () => {
       location: label.location || "",
       createdAt: label.createdAt
     });
+  }
+
+  function pickValue(row, possibleNames) {
+    const keys = Object.keys(row);
+
+    for (const name of possibleNames) {
+      const target = cleanKey(name);
+      const foundKey = keys.find((key) => cleanKey(key) === target);
+      if (foundKey && cleanText(row[foundKey]) !== "") return row[foundKey];
+    }
+
+    const cleanMap = {};
+    keys.forEach((key) => {
+      cleanMap[cleanKey(key)] = key;
+    });
+
+    for (const name of possibleNames) {
+      const target = cleanKey(name);
+      const foundKey = Object.keys(cleanMap).find(
+        (key) => key.includes(target) || target.includes(key)
+      );
+
+      if (foundKey && cleanText(row[cleanMap[foundKey]]) !== "") {
+        return row[cleanMap[foundKey]];
+      }
+    }
+
+    return "";
+  }
+
+  function detectDocType(row, docNumber) {
+    const defaultDocType = $("defaultDocType")?.value || "PO";
+
+    const directType = cleanText(
+      pickValue(row, [
+        "Type",
+        "Doc Type",
+        "Document Type",
+        "Order Type",
+        "Transfer Type"
+      ])
+    ).toUpperCase();
+
+    if (["PO", "SPO", "SXFR", "XFR"].includes(directType)) return directType;
+
+    const docString = cleanText(docNumber).toUpperCase();
+
+    if (docString.includes("SXFR")) return "SXFR";
+    if (docString.includes("SPO")) return "SPO";
+    if (docString.includes("XFR")) return "XFR";
+    if (docString.includes("PO")) return "PO";
+
+    return defaultDocType;
+  }
+
+  function findDocNumberFromRow(row) {
+    const values = Object.values(row).map(cleanText);
+
+    for (const value of values) {
+      const upper = value.toUpperCase();
+
+      const match = upper.match(/\b(SPO|SXFR|XFR|PO)[-:\s#]*([A-Z0-9-]+)\b/);
+      if (match) return `${match[1]}-${match[2]}`;
+    }
+
+    return "";
+  }
+
+  function normalizeUploadedRow(row) {
+    let docNumber = cleanText(
+      pickValue(row, [
+        "PO",
+        "PO #",
+        "PO Number",
+        "Purchase Order",
+        "SPO",
+        "SPO #",
+        "SPO Number",
+        "SXFR",
+        "SXFR #",
+        "SXFR Number",
+        "XFR",
+        "XFR #",
+        "XFR Number",
+        "Transfer",
+        "Transfer #",
+        "Transfer Number",
+        "Document",
+        "Document #",
+        "Document Number",
+        "Doc",
+        "Doc #",
+        "Doc Number",
+        "Order Number",
+        "Order #",
+        "Receipt Number",
+        "Receiver",
+        "Receiver Number",
+        "Reference Number"
+      ])
+    );
+
+    if (!docNumber) {
+      docNumber = findDocNumberFromRow(row);
+    }
+
+    const item = cleanText(
+      pickValue(row, [
+        "Item",
+        "Item #",
+        "Item Number",
+        "Item No",
+        "Item ID",
+        "SKU",
+        "Part Number",
+        "Product Number",
+        "Material",
+        "Product"
+      ])
+    );
+
+    const qty = cleanText(
+      pickValue(row, [
+        "Qty",
+        "QTY",
+        "Quantity",
+        "Qty Received",
+        "QTY Received",
+        "Received Qty",
+        "Order Qty",
+        "Ordered Qty",
+        "Qty Ordered",
+        "Qty To Receive",
+        "QTY To Receive",
+        "Transfer Qty",
+        "Ship Qty"
+      ])
+    );
+
+    const description = cleanText(
+      pickValue(row, [
+        "Description",
+        "Item Description",
+        "Desc",
+        "Product Description",
+        "Item Desc",
+        "Name"
+      ])
+    );
+
+    const location = cleanText(
+      pickValue(row, [
+        "Location",
+        "Bin",
+        "Bin Location",
+        "Loc",
+        "Putaway Location",
+        "Primary Location",
+        "To Bin",
+        "From Bin",
+        "Slot"
+      ])
+    );
+
+    const docType = detectDocType(row, docNumber);
+
+    return {
+      docType,
+      docNumber,
+      item,
+      qty,
+      description,
+      location
+    };
+  }
+
+  function findBestHeaderRow(rows) {
+    let bestIndex = 0;
+    let bestScore = -1;
+
+    rows.slice(0, 30).forEach((row, index) => {
+      const joined = row.map(cleanKey).join(" ");
+      let score = 0;
+
+      if (joined.includes("item")) score += 4;
+      if (joined.includes("qty") || joined.includes("quantity")) score += 4;
+      if (joined.includes("description") || joined.includes("desc")) score += 2;
+      if (joined.includes("location") || joined.includes("bin")) score += 2;
+      if (
+        joined.includes("po") ||
+        joined.includes("spo") ||
+        joined.includes("xfr") ||
+        joined.includes("document") ||
+        joined.includes("receiver")
+      ) {
+        score += 3;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    return bestIndex;
+  }
+
+  async function readUploadedFile() {
+    const input = $("poFileInput");
+    const file = input?.files?.[0];
+
+    if (!file) {
+      alert("Choose a CSV, XLS, or XLSX file first.");
+      return [];
+    }
+
+    if (!window.XLSX) {
+      alert("Excel/CSV reader failed to load. Check your internet connection.");
+      return [];
+    }
+
+    const data = await file.arrayBuffer();
+
+    const workbook = XLSX.read(data, {
+      type: "array",
+      cellDates: false,
+      raw: false
+    });
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: "",
+      raw: false
+    });
+
+    if (!rows.length) return [];
+
+    const headerIndex = findBestHeaderRow(rows);
+    const headers = rows[headerIndex] || [];
+    const dataRows = rows.slice(headerIndex + 1);
+
+    const objects = dataRows.map((row) => {
+      const obj = {};
+      headers.forEach((header, index) => {
+        const name = cleanText(header) || `Column${index + 1}`;
+        obj[name] = row[index] ?? "";
+      });
+      return obj;
+    });
+
+    return objects
+      .map(normalizeUploadedRow)
+      .filter((row) => row.docNumber || row.item || row.qty || row.description || row.location);
+  }
+
+  function renderUploadPreview(rows) {
+    const body = $("poPreviewBody");
+    const summary = $("importSummary");
+
+    if (!body) return;
+
+    body.innerHTML = "";
+
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${escapeHtml(row.docType)}</td>
+        <td>${escapeHtml(row.docNumber)}</td>
+        <td>${escapeHtml(row.item)}</td>
+        <td>${escapeHtml(row.qty)}</td>
+        <td>${escapeHtml(row.description)}</td>
+        <td>${escapeHtml(row.location)}</td>
+      `;
+
+      body.appendChild(tr);
+    });
+
+    if (summary) {
+      summary.textContent = `${rows.length} line(s) ready to import.`;
+    }
   }
 
   function addLabel({ docType, docNumber, item, qty, description, location, copies = 1 }) {
@@ -115,7 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function addBulkLabels() {
-    const raw = $("bulkText").value.trim();
+    const raw = $("bulkText")?.value.trim();
 
     if (!raw) {
       alert("Paste at least one bulk line first.");
@@ -187,7 +476,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function markChecked(data) {
-    const worker = $("workerName").value.trim() || "Unknown Worker";
+    const worker = $("workerName")?.value.trim() || "Unknown Worker";
 
     if (state.checks.some((row) => row.lineId === data.lineId)) {
       alert("This line was already checked. No duplicate count added.");
@@ -209,7 +498,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     save();
     renderLog();
-    $("scanInput").value = "";
+
+    if ($("scanInput")) $("scanInput").value = "";
   }
 
   function renderLog() {
@@ -237,15 +527,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const today = todayKey();
-    const worker = $("workerName").value.trim();
+    const worker = $("workerName")?.value.trim();
 
     const todayRows = state.checks.filter((row) => row.date === today);
     const workerRows = worker
       ? todayRows.filter((row) => row.worker.toLowerCase() === worker.toLowerCase())
       : [];
 
-    $("todayTotal").textContent = todayRows.length;
-    $("workerTotal").textContent = worker ? workerRows.length : 0;
+    if ($("todayTotal")) $("todayTotal").textContent = todayRows.length;
+    if ($("workerTotal")) $("workerTotal").textContent = worker ? workerRows.length : 0;
   }
 
   function exportCsv() {
@@ -292,194 +582,15 @@ document.addEventListener("DOMContentLoaded", () => {
     URL.revokeObjectURL(url);
   }
 
-  function cleanKey(value) {
-    return String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-  }
-
-  function pickValue(row, possibleNames) {
-    const keys = Object.keys(row);
-
-    for (const name of possibleNames) {
-      const target = cleanKey(name);
-      const foundKey = keys.find((key) => cleanKey(key) === target);
-      if (foundKey) return row[foundKey];
-    }
-
-    return "";
-  }
-
-  function detectDocType(row, docNumber) {
-    const defaultDocType = $("defaultDocType")?.value || "PO";
-
-    const directType = cleanText(
-      pickValue(row, [
-        "Type",
-        "Doc Type",
-        "Document Type",
-        "Order Type",
-        "Transfer Type"
-      ])
-    ).toUpperCase();
-
-    if (["PO", "SPO", "SXFR", "XFR"].includes(directType)) {
-      return directType;
-    }
-
-    const docString = cleanText(docNumber).toUpperCase();
-
-    if (docString.startsWith("SPO")) return "SPO";
-    if (docString.startsWith("SXFR")) return "SXFR";
-    if (docString.startsWith("XFR")) return "XFR";
-    if (docString.startsWith("PO")) return "PO";
-
-    return defaultDocType;
-  }
-
-  function normalizeUploadedRow(row) {
-    const docNumber = cleanText(
-      pickValue(row, [
-        "PO",
-        "PO #",
-        "PO Number",
-        "Purchase Order",
-        "SPO",
-        "SPO #",
-        "SPO Number",
-        "SXFR",
-        "SXFR #",
-        "SXFR Number",
-        "XFR",
-        "XFR #",
-        "XFR Number",
-        "Transfer",
-        "Transfer #",
-        "Transfer Number",
-        "Document",
-        "Document #",
-        "Document Number",
-        "Order Number",
-        "Order #",
-        "Receipt Number",
-        "Reference Number"
-      ])
-    );
-
-    const docType = detectDocType(row, docNumber);
-
-    return {
-      docType,
-      docNumber,
-      item: cleanText(
-        pickValue(row, [
-          "Item",
-          "Item #",
-          "Item Number",
-          "SKU",
-          "Part Number",
-          "Product Number",
-          "Item ID"
-        ])
-      ),
-      qty: cleanText(
-        pickValue(row, [
-          "Qty",
-          "Quantity",
-          "QTY Received",
-          "Received Qty",
-          "Order Qty",
-          "Ordered Qty",
-          "Qty Ordered",
-          "Qty To Receive",
-          "QTY To Receive"
-        ])
-      ),
-      description: cleanText(
-        pickValue(row, [
-          "Description",
-          "Item Description",
-          "Desc",
-          "Product Description",
-          "Item Desc"
-        ])
-      ),
-      location: cleanText(
-        pickValue(row, [
-          "Location",
-          "Bin",
-          "Bin Location",
-          "Loc",
-          "Putaway Location",
-          "Primary Location",
-          "To Bin",
-          "From Bin"
-        ])
-      )
-    };
-  }
-
-  async function readUploadedFile() {
-    const fileInput = $("poFileInput");
-    const file = fileInput?.files?.[0];
-
-    if (!file) {
-      alert("Choose a CSV or Excel file first.");
-      return [];
-    }
-
-    if (!window.XLSX) {
-      alert("Excel/CSV reader failed to load. Check internet connection.");
-      return [];
-    }
-
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    return rawRows
-      .map(normalizeUploadedRow)
-      .filter((row) => row.docNumber || row.item || row.qty || row.description || row.location);
-  }
-
-  function renderUploadPreview(rows) {
-    const body = $("poPreviewBody");
-    const summary = $("importSummary");
-
-    if (!body) return;
-
-    body.innerHTML = "";
-
-    rows.forEach((row) => {
-      const tr = document.createElement("tr");
-
-      tr.innerHTML = `
-        <td>${escapeHtml(row.docType)}</td>
-        <td>${escapeHtml(row.docNumber)}</td>
-        <td>${escapeHtml(row.item)}</td>
-        <td>${escapeHtml(row.qty)}</td>
-        <td>${escapeHtml(row.description)}</td>
-        <td>${escapeHtml(row.location)}</td>
-      `;
-
-      body.appendChild(tr);
-    });
-
-    if (summary) {
-      summary.textContent = `${rows.length} line(s) ready to import.`;
-    }
-  }
-
   $("addLabelBtn")?.addEventListener("click", () => {
     addLabel({
-      docType: $("docType").value,
-      docNumber: $("poNumber").value.trim(),
-      item: $("itemNumber").value.trim(),
-      qty: $("quantity").value.trim(),
-      description: $("description").value.trim(),
-      location: $("location").value.trim(),
-      copies: $("labelCopies").value
+      docType: $("docType")?.value || "PO",
+      docNumber: $("poNumber")?.value.trim() || "",
+      item: $("itemNumber")?.value.trim() || "",
+      qty: $("quantity")?.value.trim() || "",
+      description: $("description")?.value.trim() || "",
+      location: $("location")?.value.trim() || "",
+      copies: $("labelCopies")?.value || 1
     });
   });
 
@@ -527,6 +638,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       importedRows = await readUploadedFile();
       renderUploadPreview(importedRows);
+
+      if (!importedRows.length) {
+        alert("No PO / SPO / SXFR / XFR lines found. The file opened, but item/qty/document columns were not detected.");
+      }
     } catch (err) {
       console.error(err);
       alert("Could not read this file. Make sure it is CSV, XLS, or XLSX.");
@@ -540,7 +655,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (!importedRows.length) {
-        alert("No lines found.");
+        alert("No PO / SPO / SXFR / XFR lines found.");
         return;
       }
 
