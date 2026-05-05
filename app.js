@@ -365,7 +365,8 @@ document.addEventListener("DOMContentLoaded", () => {
       node.querySelector(".qty").textContent = label.qty || "";
       node.querySelector(".desc").textContent = label.description || "";
       node.querySelector(".location").textContent = label.location || "";
-      node.querySelector(".lineid").textContent = label.lineId || "";
+      node.querySelector(".lineid").textContent =
+  `${label.docType || ""} # ${label.docNumber || ""}`;
 
       const canvas = node.querySelector(".qr");
 
