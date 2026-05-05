@@ -22,9 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function cleanKey(value) {
-    return String(value ?? "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
+    return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
   }
 
   function escapeHtml(value) {
@@ -49,8 +47,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!number && type) return type;
     if (!type) return number;
-
-    if (number === type) return "";
     if (number.startsWith(type)) return number;
 
     return `${type}${number}`;
@@ -70,23 +66,17 @@ document.addEventListener("DOMContentLoaded", () => {
       createdAt: label.createdAt
     };
 
-    const encoded = encodeURIComponent(JSON.stringify(payload));
-    return `${window.location.origin}${window.location.pathname}?scan=${encoded}`;
+    return `${window.location.origin}${window.location.pathname}?scan=${encodeURIComponent(JSON.stringify(payload))}`;
   }
 
   function handleUrlScan() {
     const params = new URLSearchParams(window.location.search);
     const scan = params.get("scan");
-
     if (!scan) return;
 
     try {
       const data = JSON.parse(decodeURIComponent(scan));
-
-      if ($("scanInput")) {
-        $("scanInput").value = JSON.stringify(data);
-      }
-
+      if ($("scanInput")) $("scanInput").value = JSON.stringify(data);
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (err) {
       console.error("Could not read QR scan from URL", err);
@@ -105,8 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const name of names) {
       const target = cleanKey(name);
       const foundKey = keys.find((key) => {
-        const c = cleanKey(key);
-        return c.includes(target) || target.includes(c);
+        const cleaned = cleanKey(key);
+        return cleaned.includes(target) || target.includes(cleaned);
       });
 
       if (foundKey && cleanText(row[foundKey]) !== "") return row[foundKey];
@@ -144,36 +134,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return "";
   }
 
-  function fixDocNumber(row, docNumber, docType) {
-    let number = cleanText(docNumber);
-    const type = cleanText(docType).toUpperCase();
+  function extractFileMeta(rows) {
+    const text = rows
+      .slice(0, 25)
+      .map((row) => row.join(" "))
+      .join(" ")
+      .toUpperCase();
 
-    if (!number || number.toUpperCase() === type) {
-      const found = findDocNumberFromRow(row);
-      if (found && found.toUpperCase() !== type) number = found;
-    }
+    let docNumber = "";
+    let branch = "";
 
-    return number;
+    const docMatch = text.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?)\s*[:\-]?\s*(SPO\d+|PO\d+|SXFR\d+|XFR\d+)\b/i);
+    if (docMatch) docNumber = docMatch[2].toUpperCase();
+
+    const branchMatch = text.match(/\bBRANCH\s*[-:]\s*([A-Z]{2}\d{2})\b/i);
+    if (branchMatch) branch = branchMatch[1].toUpperCase();
+
+    return { docNumber, branch };
   }
-function extractFileMeta(rows) {
-  let docNumber = "";
-  let branch = "";
 
-  const text = rows
-    .slice(0, 20)
-    .map((row) => row.join(" "))
-    .join(" ")
-    .toUpperCase();
-
-  const docMatch = text.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?)\s*[:\-]?\s*(SPO\d+|PO\d+|SXFR\d+|XFR\d+)\b/i);
-  if (docMatch) docNumber = docMatch[2].toUpperCase();
-
-  const branchMatch = text.match(/\bBRANCH\s*[-:]\s*([A-Z]{2}\d{2})\b/i);
-  if (branchMatch) branch = branchMatch[1].toUpperCase();
-
-  return { docNumber, branch };
-}
-  function normalizeUploadedRow(row, fileMeta = {}) { {
+  function normalizeUploadedRow(row, fileMeta = {}) {
     let docNumber = cleanText(
       pickValue(row, [
         "P.O.#",
@@ -197,20 +177,16 @@ function extractFileMeta(rows) {
         "Order #",
         "Receipt Number",
         "Receiver Number",
-        "Reference Number",
-        "PO",
-        "SPO",
-        "SXFR",
-        "XFR",
-        "Transfer",
-        "Document",
-        "Doc",
-        "Receiver"
+        "Reference Number"
       ])
     );
 
     let docType = detectDocType(row, docNumber);
-    docNumber = fixDocNumber(row, docNumber, docType);
+
+    if (!docNumber || docNumber.toUpperCase() === docType) {
+      docNumber = fileMeta.docNumber || findDocNumberFromRow(row);
+    }
+
     docType = detectDocType(row, docNumber);
 
     const branch =
@@ -225,7 +201,9 @@ function extractFileMeta(rows) {
           "Facility",
           "Location Branch"
         ])
-      ) || cleanText($("defaultBranch")?.value || "");
+      ) ||
+      fileMeta.branch ||
+      cleanText($("defaultBranch")?.value || "");
 
     const item = cleanText(
       pickValue(row, [
@@ -361,6 +339,7 @@ function extractFileMeta(rows) {
 
     if (!rows.length) return [];
 
+    const fileMeta = extractFileMeta(rows);
     const headerIndex = findBestHeaderRow(rows);
     const headers = rows[headerIndex] || [];
     const dataRows = rows.slice(headerIndex + 1);
@@ -375,7 +354,7 @@ function extractFileMeta(rows) {
     });
 
     return objects
-      .map(normalizeUploadedRow)
+      .map((row) => normalizeUploadedRow(row, fileMeta))
       .filter((row) => row.docNumber || row.item || row.qty || row.description || row.location);
   }
 
