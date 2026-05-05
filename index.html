@@ -198,16 +198,41 @@
             <canvas class="qr"></canvas>
           </div>
           <div class="label-right">
-            <div class="label-title">
-              <span class="docTypeText"></span> -
-              <span class="docNumber"></span>
-            </div>
-            <div><strong>Item:</strong> <span class="item"></span></div>
-            <div><strong>Qty:</strong> <span class="qty"></span></div>
-            <div><strong>Desc:</strong> <span class="desc"></span></div>
-            <div><strong>Loc:</strong> <span class="location"></span></div>
-            <div><strong>Document:</strong> <span class="lineid"></span></div>
-          </div>
+           <div class="label-title">
+  <div class="poLine">
+    P.O.#: <span class="docNumber"></span>
+  </div>
+  <div class="branchLine">
+    Branch - <span class="location"></span>
+  </div>
+</div>
+           <label>Document #
+  <input id="poNumber" placeholder="Example: SPO0216419" />
+</label>
+
+<label>Branch
+  <input id="branch" placeholder="Example: OH01" />
+</label>
+
+<label>Item #
+  <input id="itemNumber" placeholder="Example: 606531" />
+</label>
+
+<label>Qty
+  <input id="quantity" placeholder="Example: 24" />
+</label>
+
+<label>Description
+  <input id="description" placeholder="Optional" />
+</label>
+
+<label>Location
+  <input id="location" placeholder="Example: B-20-2" />
+</label>
+
+<label>Copies
+  <input id="labelCopies" type="number" value="1" min="1" />
+</label>
         </div>
       </template>
     </section>
