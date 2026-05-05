@@ -3,191 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Line Check Counter | Zebra QR Labels</title>
+  <title>Sticker Price / Line Check</title>
   <link rel="stylesheet" href="style.css" />
-
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
-
 <body>
-  <header class="topbar">
-    <div>
-      <h1>Line Check Counter</h1>
-      <p>Print Zebra QR stickers, scan checked lines, and count worker productivity.</p>
-    </div>
-    <button id="printLabelsBtn" class="primary">Print Labels</button>
-  </header>
-
-  <main class="layout">
+  <main class="app">
     <section class="card">
-      <h2>Create Zebra Stickers</h2>
+      <h1>Upload PO / SPO / SXFR / XFR File</h1>
 
-      <div class="grid">
-        <label>Worker Name
-          <input id="workerName" placeholder="Angel Quincel" />
-        </label>
+      <p>
+        Upload CSV, XLS, or XLSX. The app will detect document type, document number,
+        item, qty, description, and location.
+      </p>
 
-        <label>Document Type
-          <select id="docType">
-            <option value="PO">PO</option>
-            <option value="SPO">SPO</option>
-            <option value="SXFR">SXFR</option>
-            <option value="XFR">XFR</option>
-          </select>
-        </label>
+      <label>Default Upload Document Type</label>
+      <select id="defaultDocType">
+        <option value="PO">PO</option>
+        <option value="SPO" selected>SPO</option>
+        <option value="SXFR">SXFR</option>
+        <option value="XFR">XFR</option>
+      </select>
 
-        <label>Document #
-          <input id="poNumber" placeholder="237555" />
-        </label>
-
-        <label>Item #
-          <input id="itemNumber" placeholder="601535" />
-        </label>
-
-        <label>Quantity
-          <input id="quantity" type="number" min="0" placeholder="32" />
-        </label>
-
-        <label>Description
-          <input id="description" placeholder='36" by 48" blinds' />
-        </label>
-
-        <label>Location
-          <input id="location" placeholder="A12-03" />
-        </label>
-
-        <label>Label Count
-          <input id="labelCopies" type="number" min="1" value="1" />
-        </label>
-      </div>
+      <input id="fileInput" type="file" accept=".csv,.xls,.xlsx" />
 
       <div class="actions">
-        <button id="addLabelBtn">Add Label</button>
-        <button id="clearLabelsBtn" class="ghost">Clear Labels</button>
+        <button id="previewBtn">Preview File</button>
+        <button id="importBtn">Import Lines</button>
+        <button id="clearBtn" class="secondary">Clear</button>
       </div>
 
-      <hr />
+      <p id="status">0 PO line(s) ready to import.</p>
 
-      <h3>Bulk Paste</h3>
-      <p class="hint">Format: Type, Doc #, Item, Qty, Description, Location</p>
-      <textarea id="bulkText" rows="6" placeholder="PO, 237555, 601535, 32, 36 by 48 blinds, A12-03"></textarea>
-      <button id="bulkAddBtn">Add Bulk Labels</button>
-
-      <hr />
-
-      <h3>Upload PO / SPO / SXFR / XFR File</h3>
-      <p class="hint">Upload CSV, XLS, or XLSX. The app will try to detect document type, document number, item, qty, description, and location.</p>
-
-      <label>Default Upload Document Type
-        <select id="defaultDocType">
-          <option value="PO">PO</option>
-          <option value="SPO">SPO</option>
-          <option value="SXFR">SXFR</option>
-          <option value="XFR">XFR</option>
-        </select>
-      </label>
-
-      <input id="poFileInput" type="file" accept=".csv,.xlsx,.xls" />
-
-      <div class="actions">
-        <button id="previewPoBtn">Preview File</button>
-        <button id="importPoBtn" class="primary">Import Lines</button>
-      </div>
-
-      <div id="importSummary" class="hint"></div>
-
-      <div class="table-wrap small-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Doc #</th>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Description</th>
-              <th>Location</th>
-            </tr>
-          </thead>
-          <tbody id="poPreviewBody"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Check Line</h2>
-      <p class="hint">Scan the QR code with a phone camera or USB scanner. It will count the line once.</p>
-
-      <label>Scan / Paste QR Data
-        <textarea id="scanInput" rows="5" placeholder="Scan QR here..."></textarea>
-      </label>
-
-      <button id="checkLineBtn" class="primary">Mark Line Checked</button>
-
-      <div class="stats">
-        <div>
-          <strong id="todayTotal">0</strong>
-          <span>Total Checked Today</span>
-        </div>
-        <div>
-          <strong id="workerTotal">0</strong>
-          <span>Selected Worker Today</span>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="exportCsvBtn">Export CSV</button>
-        <button id="resetChecksBtn" class="danger">Reset Checks</button>
-      </div>
-    </section>
-  </main>
-
-  <section class="card wide print-card">
-    <h2>Printable Zebra Label Sheet</h2>
-    <p class="hint">For Zebra: use 4in x 2in label size, scale 100%, margins none/minimum.</p>
-    <div id="labelSheet" class="label-sheet"></div>
-  </section>
-
-  <section class="card wide">
-    <h2>Daily Line Check Log</h2>
-    <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Date/Time</th>
-            <th>Worker</th>
             <th>Type</th>
             <th>Doc #</th>
             <th>Item</th>
             <th>Qty</th>
             <th>Description</th>
             <th>Location</th>
-            <th>Line ID</th>
           </tr>
         </thead>
-        <tbody id="checkLogBody"></tbody>
+        <tbody id="previewBody"></tbody>
       </table>
-    </div>
-  </section>
-
-  <template id="labelTemplate">
-    <div class="zebra-label">
-      <div class="label-left">
-        <canvas class="qr"></canvas>
-      </div>
-
-      <div class="label-right">
-        <div class="label-title">LINE CHECK</div>
-        <div><b>Type:</b> <span class="docTypeText"></span></div>
-        <div><b>Doc:</b> <span class="docNumber"></span></div>
-        <div><b>Item:</b> <span class="item"></span></div>
-        <div><b>Qty:</b> <span class="qty"></span></div>
-        <div><b>Desc:</b> <span class="desc"></span></div>
-        <div><b>Loc:</b> <span class="location"></span></div>
-        <div><b>ID:</b> <span class="lineid"></span></div>
-      </div>
-    </div>
-  </template>
+    </section>
+  </main>
 
   <script src="app.js"></script>
 </body>
