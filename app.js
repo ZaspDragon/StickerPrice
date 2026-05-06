@@ -18,11 +18,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function cleanText(value) {
-    return String(value ?? "").trim();
+    return String(value ?? "")
+      .replace(/\$/g, "")
+      .trim();
   }
 
   function cleanKey(value) {
-    return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return String(value ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
   }
 
   function escapeHtml(value) {
@@ -53,34 +57,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function labelPayload(label) {
-    const payload = {
-      type: "line_check",
-      lineId: label.lineId,
-      docType: label.docType,
-      docNumber: label.docNumber,
-      branch: label.branch || "",
-      item: label.item,
-      qty: label.qty,
-      description: label.description,
-      location: label.location || "",
-      createdAt: label.createdAt
-    };
-
-    return `${window.location.origin}${window.location.pathname}?scan=${encodeURIComponent(JSON.stringify(payload))}`;
-  }
-
-  function handleUrlScan() {
-    const params = new URLSearchParams(window.location.search);
-    const scan = params.get("scan");
-    if (!scan) return;
-
-    try {
-      const data = JSON.parse(decodeURIComponent(scan));
-      if ($("scanInput")) $("scanInput").value = JSON.stringify(data);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (err) {
-      console.error("Could not read QR scan from URL", err);
-    }
+    const item = encodeURIComponent(cleanText(label.item));
+    return `https://www.chadwellsupply.com/search/?q=${item}`;
   }
 
   function pickValue(row, names) {
@@ -136,21 +114,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function extractFileMeta(rows) {
     const text = rows
-      .slice(0, 25)
+      .slice(0, 30)
       .map((row) => row.join(" "))
       .join(" ")
       .toUpperCase();
 
-    let docNumber = "";
-    let branch = "";
+    let docNumber = cleanText($("defaultDocNumber")?.value || "");
+    let branch = cleanText($("defaultBranch")?.value || "");
 
     const docMatch = text.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?)\s*[:\-]?\s*(SPO\d+|PO\d+|SXFR\d+|XFR\d+)\b/i);
-    if (docMatch) docNumber = docMatch[2].toUpperCase();
+    if (!docNumber && docMatch) docNumber = docMatch[2].toUpperCase();
 
     const branchMatch = text.match(/\bBRANCH\s*[-:]\s*([A-Z]{2}\d{2})\b/i);
-    if (branchMatch) branch = branchMatch[1].toUpperCase();
+    if (!branch && branchMatch) branch = branchMatch[1].toUpperCase();
 
     return { docNumber, branch };
+  }
+
+  function findRealItem(row, currentItem) {
+    let item = cleanText(currentItem);
+
+    if (/^[0-9]{5,8}$/.test(item)) return item;
+    if (/^[A-Z0-9-]{4,20}$/i.test(item) && item.length <= 20 && !item.includes(" ")) return item;
+
+    const values = Object.values(row).map(cleanText);
+
+    const numericItem = values.find((v) => /^[0-9]{5,8}$/.test(v));
+    if (numericItem) return numericItem;
+
+    return item;
   }
 
   function normalizeUploadedRow(row, fileMeta = {}) {
@@ -205,9 +197,8 @@ document.addEventListener("DOMContentLoaded", () => {
       fileMeta.branch ||
       cleanText($("defaultBranch")?.value || "");
 
-    const item = cleanText(
+    let item = cleanText(
       pickValue(row, [
-        "Item",
         "Item #",
         "Item Number",
         "Item No",
@@ -216,9 +207,12 @@ document.addEventListener("DOMContentLoaded", () => {
         "Part Number",
         "Product Number",
         "Material",
-        "Product"
+        "Product",
+        "Item"
       ])
     );
+
+    item = findRealItem(row, item);
 
     const qty = cleanText(
       pickValue(row, [
@@ -466,7 +460,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let skipped = 0;
 
     lines.forEach((line) => {
-      const parts = line.split(",").map((x) => x.trim());
+      const parts = line.split(",").map((x) => cleanText(x));
 
       let docType = parts[0] || $("docType").value || "PO";
       let docNumber = parts[1] || "";
@@ -521,10 +515,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!clean) throw new Error("Nothing was scanned.");
 
     if (clean.startsWith("http")) {
-      const url = new URL(clean);
-      const scan = url.searchParams.get("scan");
-      if (!scan) throw new Error("No scan data in URL.");
-      return JSON.parse(decodeURIComponent(scan));
+      window.open(clean, "_blank");
+      throw new Error("Opened item search.");
     }
 
     const data = JSON.parse(clean);
@@ -667,7 +659,9 @@ document.addEventListener("DOMContentLoaded", () => {
       markChecked(parseScanData($("scanInput").value));
     } catch (err) {
       console.error(err);
-      alert("QR data was not readable. Scan again.");
+      if (err.message !== "Opened item search.") {
+        alert("QR data was not readable. Scan again.");
+      }
     }
   });
 
@@ -773,7 +767,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  handleUrlScan();
   renderLabels();
   renderLog();
 });
