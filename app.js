@@ -72,18 +72,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${type}${number}`;
   }
 
+  // QR CODE DESTINATION:
+  // Scanning the QR opens Chadwell's website search using the label item number.
   function labelPayload(label) {
-    const item = encodeURIComponent(cleanText(label.item));
+    const item = encodeURIComponent(cleanText(label.item || ""));
     return `https://www.chadwellsupply.com/search/?q=${item}`;
   }
 
   function looksLikeItemNumber(value) {
     return /^[0-9]{5,8}$/.test(cleanText(value));
-  }
-
-  function looksLikeLocation(value) {
-    const text = cleanText(value).toUpperCase();
-    return /^[A-Z]{1,4}-[0-9]{1,3}-[0-9]{1,3}(-[0-9]{1,3})?$/.test(text);
   }
 
   function rowIsBlank(row) {
@@ -295,12 +292,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rows.length) return [];
 
     const meta = extractTopDocumentMeta(rows);
-
     const receivingRows = detectReceivingReportRows(rows, meta);
 
-    if (receivingRows.length) {
-      return receivingRows;
-    }
+    if (receivingRows.length) return receivingRows;
 
     return readCleanTableRows(rows, meta);
   }
@@ -371,23 +365,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const node = template.content.cloneNode(true);
 
       node.querySelector(".docNumber").textContent = formatDocDisplay(label);
-node.querySelector(".branch").textContent = label.branch || "";
+      node.querySelector(".branch").textContent = label.branch || "";
 
-const typeText = node.querySelector(".docTypeText");
-if (typeText) {
-  typeText.textContent = label.docType || "";
-}
+      const typeText = node.querySelector(".docTypeText");
+      if (typeText) typeText.textContent = label.docType || "";
 
-node.querySelector(".item").textContent = label.item || "";
-node.querySelector(".qty").textContent = label.qty || "";
-node.querySelector(".desc").textContent = label.description || "";
-node.querySelector(".location").textContent = label.location || "";
+      node.querySelector(".item").textContent = label.item || "";
+      node.querySelector(".qty").textContent = label.qty || "";
+      node.querySelector(".desc").textContent = label.description || "";
+      node.querySelector(".location").textContent = label.location || "";
 
       const canvas = node.querySelector(".qr");
 
       if (window.QRCode) {
         QRCode.toCanvas(canvas, labelPayload(label), {
-          width: 120,
+          width: 140,
           margin: 1,
           errorCorrectionLevel: "M"
         }).catch(() => {
