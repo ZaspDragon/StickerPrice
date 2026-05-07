@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function cleanText(value) {
     return String(value ?? "")
       .replace(/\$/g, "")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -61,201 +62,240 @@ document.addEventListener("DOMContentLoaded", () => {
     return `https://www.chadwellsupply.com/search/?q=${item}`;
   }
 
-  function pickValue(row, names) {
-    const keys = Object.keys(row);
+  function isDocType(value) {
+    return ["PO", "SPO", "SXFR", "XFR"].includes(cleanText(value).toUpperCase());
+  }
 
-    for (const name of names) {
-      const target = cleanKey(name);
-      const foundKey = keys.find((key) => cleanKey(key) === target);
-      if (foundKey && cleanText(row[foundKey]) !== "") return row[foundKey];
-    }
+  function detectDocTypeFromText(text) {
+    const upper = cleanText(text).toUpperCase();
 
-    for (const name of names) {
-      const target = cleanKey(name);
-      const foundKey = keys.find((key) => {
-        const cleaned = cleanKey(key);
-        return cleaned.includes(target) || target.includes(cleaned);
-      });
-
-      if (foundKey && cleanText(row[foundKey]) !== "") return row[foundKey];
-    }
+    if (upper.includes("SXFR")) return "SXFR";
+    if (upper.includes("SPO")) return "SPO";
+    if (upper.includes("XFR")) return "XFR";
+    if (upper.includes("PO")) return "PO";
 
     return "";
   }
 
-  function detectDocType(row, docNumber) {
-    const def = $("defaultDocType")?.value || "PO";
+  function normalizeDocNumber(value, defaultType = "PO") {
+    let text = cleanText(value).toUpperCase();
+    text = text.replace(/P\.O\./g, "PO");
+    text = text.replace(/[^A-Z0-9-]/g, "");
 
-    const direct = cleanText(
-      pickValue(row, ["Type", "Doc Type", "Document Type", "Order Type", "Transfer Type"])
-    ).toUpperCase();
+    if (!text) return "";
 
-    if (["PO", "SPO", "SXFR", "XFR"].includes(direct)) return direct;
+    if (/^(PO|SPO|SXFR|XFR)/.test(text)) return text;
 
-    const d = cleanText(docNumber).toUpperCase();
-
-    if (d.includes("SXFR")) return "SXFR";
-    if (d.includes("SPO")) return "SPO";
-    if (d.includes("XFR")) return "XFR";
-    if (d.includes("PO")) return "PO";
-
-    return def;
+    return `${defaultType}${text}`;
   }
 
-  function findDocNumberFromRow(row) {
-    for (const value of Object.values(row).map(cleanText)) {
-      const upper = value.toUpperCase();
-      const match = upper.match(/\b(SPO|SXFR|XFR|PO)[-:\s#]*([A-Z0-9-]+)\b/);
-      if (match) return `${match[1]}${match[2]}`;
-    }
-
-    return "";
-  }
-
-  function extractFileMeta(rows) {
-    const text = rows
-      .slice(0, 30)
-      .map((row) => row.join(" "))
-      .join(" ")
-      .toUpperCase();
-
+  function extractTopDocumentMeta(rows) {
+    const fallbackType = $("defaultDocType")?.value || "PO";
+    let docType = fallbackType;
     let docNumber = cleanText($("defaultDocNumber")?.value || "");
     let branch = cleanText($("defaultBranch")?.value || "");
 
-    const docMatch = text.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?)\s*[:\-]?\s*(SPO\d+|PO\d+|SXFR\d+|XFR\d+)\b/i);
-    if (!docNumber && docMatch) docNumber = docMatch[2].toUpperCase();
+    const topRows = rows.slice(0, 25);
 
-    const branchMatch = text.match(/\bBRANCH\s*[-:]\s*([A-Z]{2}\d{2})\b/i);
-    if (!branch && branchMatch) branch = branchMatch[1].toUpperCase();
+    for (const row of topRows) {
+      const rowText = row.map(cleanText).join(" ").toUpperCase();
 
-    return { docNumber, branch };
-  }
+      const typeFound = detectDocTypeFromText(rowText);
+      if (typeFound) docType = typeFound;
 
-  function findRealItem(row, currentItem) {
-    let item = cleanText(currentItem);
+      if (!docNumber) {
+        const fullDocMatch = rowText.match(/\b(SPO|SXFR|XFR|PO)[\s#:\-]*([0-9]{4,12})\b/i);
+        if (fullDocMatch) {
+          docType = fullDocMatch[1].toUpperCase();
+          docNumber = `${docType}${fullDocMatch[2]}`;
+        }
+      }
 
-    if (/^[0-9]{5,8}$/.test(item)) return item;
-    if (/^[A-Z0-9-]{4,20}$/i.test(item) && item.length <= 20 && !item.includes(" ")) return item;
+      if (!docNumber) {
+        const labelDocMatch = rowText.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?|DOCUMENT|DOC)\s*[:#\-]?\s*([A-Z]*[0-9]{4,12})\b/i);
+        if (labelDocMatch) {
+          const possibleType = detectDocTypeFromText(labelDocMatch[1]) || docType;
+          docType = possibleType;
+          docNumber = normalizeDocNumber(labelDocMatch[2], docType);
+        }
+      }
 
-    const values = Object.values(row).map(cleanText);
+      if (!branch) {
+        const branchMatch = rowText.match(/\bBRANCH\s*[-:#]?\s*([A-Z]{2}\d{2})\b/i);
+        if (branchMatch) branch = branchMatch[1].toUpperCase();
+      }
 
-    const numericItem = values.find((v) => /^[0-9]{5,8}$/.test(v));
-    if (numericItem) return numericItem;
-
-    return item;
-  }
-
-  function normalizeUploadedRow(row, fileMeta = {}) {
-    let docNumber = cleanText(
-      pickValue(row, [
-        "P.O.#",
-        "P.O. #",
-        "PO #",
-        "PO Number",
-        "Purchase Order",
-        "SPO #",
-        "SPO Number",
-        "SXFR #",
-        "SXFR Number",
-        "XFR #",
-        "XFR Number",
-        "Transfer #",
-        "Transfer Number",
-        "Document #",
-        "Document Number",
-        "Doc #",
-        "Doc Number",
-        "Order Number",
-        "Order #",
-        "Receipt Number",
-        "Receiver Number",
-        "Reference Number"
-      ])
-    );
-
-    let docType = detectDocType(row, docNumber);
-
-    if (!docNumber || docNumber.toUpperCase() === docType) {
-      docNumber = fileMeta.docNumber || findDocNumberFromRow(row);
+      if (!branch) {
+        const branchCode = row.find((cell) => /^[A-Z]{2}\d{2}$/i.test(cleanText(cell)));
+        if (branchCode) branch = cleanText(branchCode).toUpperCase();
+      }
     }
 
-    docType = detectDocType(row, docNumber);
+    docNumber = normalizeDocNumber(docNumber, docType);
 
-    const branch =
-      cleanText(
-        pickValue(row, [
-          "Branch",
-          "Branch #",
-          "Branch Number",
-          "Warehouse",
-          "Warehouse Branch",
-          "Site",
-          "Facility",
-          "Location Branch"
-        ])
-      ) ||
-      fileMeta.branch ||
-      cleanText($("defaultBranch")?.value || "");
+    return { docType, docNumber, branch };
+  }
 
-    let item = cleanText(
-      pickValue(row, [
-        "Item #",
-        "Item Number",
-        "Item No",
-        "Item ID",
-        "SKU",
-        "Part Number",
-        "Product Number",
-        "Material",
-        "Product",
-        "Item"
-      ])
-    );
+  function headerScore(row) {
+    const cleaned = row.map(cleanKey);
+    let score = 0;
 
-    item = findRealItem(row, item);
+    if (cleaned.includes("item") || cleaned.includes("itemnumber") || cleaned.includes("itemno") || cleaned.includes("itemid") || cleaned.includes("itemnum")) score += 10;
+    if (cleaned.includes("description") || cleaned.includes("itemdescription") || cleaned.includes("desc")) score += 10;
+    if (cleaned.includes("qty") || cleaned.includes("quantity") || cleaned.includes("qtyordered") || cleaned.includes("qtyreceived")) score += 6;
+    if (cleaned.includes("location") || cleaned.includes("loc") || cleaned.includes("bin") || cleaned.includes("binlocation")) score += 4;
 
-    const qty = cleanText(
-      pickValue(row, [
-        "Qty",
-        "QTY",
-        "Quantity",
-        "Qty Received",
-        "QTY Received",
-        "Received Qty",
-        "Order Qty",
-        "Ordered Qty",
-        "Qty Ordered",
-        "Qty To Receive",
-        "QTY To Receive",
-        "Transfer Qty",
-        "Ship Qty"
-      ])
-    );
+    return score;
+  }
 
-    const description = cleanText(
-      pickValue(row, [
-        "Description",
-        "Item Description",
-        "Desc",
-        "Product Description",
-        "Item Desc",
-        "Name"
-      ])
-    );
+  function findTableHeaderRow(rows) {
+    let bestIndex = 0;
+    let bestScore = -1;
 
-    const location = cleanText(
-      pickValue(row, [
-        "Location",
-        "Bin",
-        "Bin Location",
-        "Loc",
-        "Putaway Location",
-        "Primary Location",
-        "To Bin",
-        "From Bin",
-        "Slot"
-      ])
-    );
+    rows.forEach((row, index) => {
+      if (index > 60) return;
+
+      const score = headerScore(row);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    return bestIndex;
+  }
+
+  function mapHeaders(headers) {
+    const map = {};
+
+    headers.forEach((header, index) => {
+      const key = cleanKey(header);
+
+      if (!key) return;
+
+      if (["item", "itemnumber", "itemno", "itemnum", "itemid", "itemcode", "sku", "partnumber"].includes(key)) {
+        map.item = index;
+      }
+
+      if (["description", "desc", "itemdescription", "productdescription", "itemdesc", "productname", "name"].includes(key)) {
+        map.description = index;
+      }
+
+      if (["qty", "quantity", "qtyordered", "orderedqty", "orderqty", "qtyreceived", "receivedqty", "qtytoreceive", "transferqty", "shipqty"].includes(key)) {
+        map.qty = index;
+      }
+
+      if (["location", "loc", "bin", "binlocation", "putawaylocation", "primarylocation", "tobin", "frombin", "slot"].includes(key)) {
+        map.location = index;
+      }
+
+      if (["branch", "branchnumber", "branchno", "warehouse", "site", "facility"].includes(key)) {
+        map.branch = index;
+      }
+
+      if (["po", "ponumber", "purchaseorder", "spo", "sponumber", "sxfr", "sxfrnumber", "xfr", "xfrnumber", "document", "documentnumber", "doc", "docnumber", "ordernumber", "receivernumber"].includes(key)) {
+        map.docNumber = index;
+      }
+
+      if (["type", "doctype", "documenttype", "ordertype", "transfertype"].includes(key)) {
+        map.docType = index;
+      }
+    });
+
+    return map;
+  }
+
+  function getCell(row, index) {
+    if (index === undefined || index === null || index < 0) return "";
+    return cleanText(row[index]);
+  }
+
+  function looksLikeLineNumber(value) {
+    const text = cleanText(value);
+    return /^[0-9]{1,3}$/.test(text);
+  }
+
+  function looksLikeItemNumber(value) {
+    const text = cleanText(value);
+    return /^[0-9]{5,8}$/.test(text) || /^[A-Z0-9-]{4,20}$/i.test(text);
+  }
+
+  function looksLikeLocation(value) {
+    const text = cleanText(value).toUpperCase();
+    return /^[A-Z]{1,4}-[0-9]{1,3}-[0-9]{1,3}(-[0-9]{1,3})?$/.test(text);
+  }
+
+  function findFallbackItem(row) {
+    const values = row.map(cleanText);
+    const numeric = values.find((v) => /^[0-9]{5,8}$/.test(v));
+    if (numeric) return numeric;
+
+    return values.find((v) => /^[A-Z0-9-]{4,20}$/i.test(v) && !v.includes(" ")) || "";
+  }
+
+  function findFallbackDescription(row, usedValues = []) {
+    const used = usedValues.map((v) => cleanText(v).toLowerCase());
+
+    const candidates = row
+      .map(cleanText)
+      .filter((value) => {
+        const lower = value.toLowerCase();
+
+        if (!value) return false;
+        if (used.includes(lower)) return false;
+        if (looksLikeLineNumber(value)) return false;
+        if (looksLikeItemNumber(value)) return false;
+        if (looksLikeLocation(value)) return false;
+        if (/^(PO|SPO|SXFR|XFR)/i.test(value)) return false;
+        if (/^[0-9.,]+$/.test(value)) return false;
+
+        return value.length >= 5;
+      });
+
+    candidates.sort((a, b) => b.length - a.length);
+
+    return candidates[0] || "";
+  }
+
+  function findFallbackLocation(row) {
+    return row.map(cleanText).find(looksLikeLocation) || "";
+  }
+
+  function rowIsProbablyBlank(row) {
+    return row.map(cleanText).every((cell) => !cell);
+  }
+
+  function normalizeUploadedDataRow(row, map, meta) {
+    let docType = getCell(row, map.docType) || meta.docType || $("defaultDocType")?.value || "PO";
+    docType = cleanText(docType).toUpperCase();
+    if (!isDocType(docType)) docType = meta.docType || $("defaultDocType")?.value || "PO";
+
+    let docNumber = getCell(row, map.docNumber) || meta.docNumber || $("defaultDocNumber")?.value || "";
+    docNumber = normalizeDocNumber(docNumber, docType);
+
+    let branch = getCell(row, map.branch) || meta.branch || $("defaultBranch")?.value || "";
+
+    let item = getCell(row, map.item);
+    if (!looksLikeItemNumber(item)) item = findFallbackItem(row);
+
+    let qty = getCell(row, map.qty);
+
+    let description = getCell(row, map.description);
+
+    if (looksLikeLineNumber(description)) {
+      description = "";
+    }
+
+    if (!description) {
+      description = findFallbackDescription(row, [docNumber, branch, item, qty]);
+    }
+
+    let location = getCell(row, map.location);
+
+    if (!looksLikeLocation(location)) {
+      location = findFallbackLocation(row);
+    }
 
     return {
       docType,
@@ -266,39 +306,6 @@ document.addEventListener("DOMContentLoaded", () => {
       description,
       location
     };
-  }
-
-  function findBestHeaderRow(rows) {
-    let bestIndex = 0;
-    let bestScore = -1;
-
-    rows.slice(0, 30).forEach((row, index) => {
-      const joined = row.map(cleanKey).join(" ");
-      let score = 0;
-
-      if (joined.includes("item")) score += 4;
-      if (joined.includes("qty") || joined.includes("quantity")) score += 4;
-      if (joined.includes("description") || joined.includes("desc")) score += 2;
-      if (joined.includes("location") || joined.includes("bin")) score += 2;
-      if (joined.includes("branch") || joined.includes("warehouse")) score += 2;
-
-      if (
-        joined.includes("po") ||
-        joined.includes("spo") ||
-        joined.includes("xfr") ||
-        joined.includes("document") ||
-        joined.includes("receiver")
-      ) {
-        score += 3;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestIndex = index;
-      }
-    });
-
-    return bestIndex;
   }
 
   async function readUploadedFile() {
@@ -333,23 +340,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!rows.length) return [];
 
-    const fileMeta = extractFileMeta(rows);
-    const headerIndex = findBestHeaderRow(rows);
+    const meta = extractTopDocumentMeta(rows);
+    const headerIndex = findTableHeaderRow(rows);
     const headers = rows[headerIndex] || [];
+    const map = mapHeaders(headers);
     const dataRows = rows.slice(headerIndex + 1);
 
-    const objects = dataRows.map((row) => {
-      const obj = {};
-      headers.forEach((header, index) => {
-        const name = cleanText(header) || `Column${index + 1}`;
-        obj[name] = row[index] ?? "";
+    return dataRows
+      .filter((row) => !rowIsProbablyBlank(row))
+      .map((row) => normalizeUploadedDataRow(row, map, meta))
+      .filter((row) => {
+        if (!row.item) return false;
+        if (!row.description && !row.qty && !row.location) return false;
+        return true;
       });
-      return obj;
-    });
-
-    return objects
-      .map((row) => normalizeUploadedRow(row, fileMeta))
-      .filter((row) => row.docNumber || row.item || row.qty || row.description || row.location);
   }
 
   function renderUploadPreview(rows) {
@@ -417,13 +421,9 @@ document.addEventListener("DOMContentLoaded", () => {
     state.labels.forEach((label) => {
       const node = template.content.cloneNode(true);
 
-      const typeEl = node.querySelector(".docTypeText");
-      const branchEl = node.querySelector(".branch");
-
-      if (typeEl) typeEl.textContent = label.docType || "";
-      if (branchEl) branchEl.textContent = label.branch || "";
-
       node.querySelector(".docNumber").textContent = formatDocDisplay(label);
+      node.querySelector(".branch").textContent = label.branch || "";
+      node.querySelector(".docTypeText").textContent = label.docType || "";
       node.querySelector(".item").textContent = label.item || "";
       node.querySelector(".qty").textContent = label.qty || "";
       node.querySelector(".desc").textContent = label.description || "";
@@ -472,7 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       docType = docType.toUpperCase();
 
-      if (!["PO", "SPO", "SXFR", "XFR"].includes(docType)) {
+      if (!isDocType(docType)) {
         location = description;
         description = qty;
         qty = item;
@@ -481,6 +481,8 @@ document.addEventListener("DOMContentLoaded", () => {
         docNumber = docType;
         docType = $("docType").value || "PO";
       }
+
+      docNumber = normalizeDocNumber(docNumber, docType);
 
       if (!docNumber || !item) {
         skipped++;
@@ -640,9 +642,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   $("addLabelBtn")?.addEventListener("click", () => {
+    const docType = $("docType")?.value || "PO";
+
     addLabel({
-      docType: $("docType")?.value || "PO",
-      docNumber: $("poNumber")?.value.trim() || "",
+      docType,
+      docNumber: normalizeDocNumber($("poNumber")?.value.trim() || "", docType),
       branch: $("branch")?.value.trim() || "",
       item: $("itemNumber")?.value.trim() || "",
       qty: $("quantity")?.value.trim() || "",
@@ -701,7 +705,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderUploadPreview(importedRows);
 
       if (!importedRows.length) {
-        alert("No PO / SPO / SXFR / XFR lines found. The file opened, but item/qty/document columns were not detected.");
+        alert("No valid lines found. Make sure the file has Item # and Description columns.");
       }
     } catch (err) {
       console.error(err);
@@ -714,7 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!importedRows.length) importedRows = await readUploadedFile();
 
       if (!importedRows.length) {
-        alert("No PO / SPO / SXFR / XFR lines found.");
+        alert("No valid PO / SPO / SXFR / XFR lines found.");
         return;
       }
 
@@ -731,7 +735,7 @@ document.addEventListener("DOMContentLoaded", () => {
           String(label.docType).toLowerCase() === row.docType.toLowerCase() &&
           String(label.docNumber).toLowerCase() === row.docNumber.toLowerCase() &&
           String(label.item).toLowerCase() === row.item.toLowerCase() &&
-          String(label.location || "").toLowerCase() === row.location.toLowerCase()
+          String(label.location || "").toLowerCase() === String(row.location || "").toLowerCase()
         );
 
         if (duplicate) {
