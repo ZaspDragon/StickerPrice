@@ -372,7 +372,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       node.querySelector(".docNumber").textContent = formatDocDisplay(label);
       node.querySelector(".branch").textContent = label.branch || "";
-      node.querySelector(".docTypeText").textContent = label.docType || "";
+      const typeText = node.querySelector(".docTypeText");
+if (typeText) typeText.textContent = label.docType || "";
       node.querySelector(".item").textContent = label.item || "";
       node.querySelector(".qty").textContent = label.qty || "";
       node.querySelector(".desc").textContent = label.description || "";
