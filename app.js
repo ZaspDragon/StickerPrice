@@ -371,13 +371,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const node = template.content.cloneNode(true);
 
       node.querySelector(".docNumber").textContent = formatDocDisplay(label);
-      node.querySelector(".branch").textContent = label.branch || "";
-      const typeText = node.querySelector(".docTypeText");
-if (typeText) typeText.textContent = label.docType || "";
-      node.querySelector(".item").textContent = label.item || "";
-      node.querySelector(".qty").textContent = label.qty || "";
-      node.querySelector(".desc").textContent = label.description || "";
-      node.querySelector(".location").textContent = label.location || "";
+node.querySelector(".branch").textContent = label.branch || "";
+
+const typeText = node.querySelector(".docTypeText");
+if (typeText) {
+  typeText.textContent = label.docType || "";
+}
+
+node.querySelector(".item").textContent = label.item || "";
+node.querySelector(".qty").textContent = label.qty || "";
+node.querySelector(".desc").textContent = label.description || "";
+node.querySelector(".location").textContent = label.location || "";
 
       const canvas = node.querySelector(".qr");
 
