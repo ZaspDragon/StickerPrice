@@ -46,6 +46,21 @@ document.addEventListener("DOMContentLoaded", () => {
       .toUpperCase();
   }
 
+  function isDocType(value) {
+    return ["PO", "SPO", "SXFR", "XFR"].includes(cleanText(value).toUpperCase());
+  }
+
+  function normalizeDocNumber(value, defaultType = "PO") {
+    let text = cleanText(value).toUpperCase();
+    text = text.replace(/P\.O\./g, "PO");
+    text = text.replace(/[^A-Z0-9-]/g, "");
+
+    if (!text) return "";
+    if (/^(PO|SPO|SXFR|XFR)/.test(text)) return text;
+
+    return `${defaultType}${text}`;
+  }
+
   function formatDocDisplay(label) {
     const type = cleanText(label.docType).toUpperCase();
     const number = cleanText(label.docNumber).toUpperCase();
@@ -62,73 +77,42 @@ document.addEventListener("DOMContentLoaded", () => {
     return `https://www.chadwellsupply.com/search/?q=${item}`;
   }
 
-  function isDocType(value) {
-    return ["PO", "SPO", "SXFR", "XFR"].includes(cleanText(value).toUpperCase());
+  function looksLikeItemNumber(value) {
+    return /^[0-9]{5,8}$/.test(cleanText(value));
   }
 
-  function detectDocTypeFromText(text) {
-    const upper = cleanText(text).toUpperCase();
-
-    if (upper.includes("SXFR")) return "SXFR";
-    if (upper.includes("SPO")) return "SPO";
-    if (upper.includes("XFR")) return "XFR";
-    if (upper.includes("PO")) return "PO";
-
-    return "";
+  function looksLikeLocation(value) {
+    const text = cleanText(value).toUpperCase();
+    return /^[A-Z]{1,4}-[0-9]{1,3}-[0-9]{1,3}(-[0-9]{1,3})?$/.test(text);
   }
 
-  function normalizeDocNumber(value, defaultType = "PO") {
-    let text = cleanText(value).toUpperCase();
-    text = text.replace(/P\.O\./g, "PO");
-    text = text.replace(/[^A-Z0-9-]/g, "");
-
-    if (!text) return "";
-
-    if (/^(PO|SPO|SXFR|XFR)/.test(text)) return text;
-
-    return `${defaultType}${text}`;
+  function rowIsBlank(row) {
+    return row.map(cleanText).every((cell) => !cell);
   }
 
   function extractTopDocumentMeta(rows) {
-    const fallbackType = $("defaultDocType")?.value || "PO";
+    const fallbackType = $("defaultDocType")?.value || "SPO";
     let docType = fallbackType;
     let docNumber = cleanText($("defaultDocNumber")?.value || "");
     let branch = cleanText($("defaultBranch")?.value || "");
 
-    const topRows = rows.slice(0, 25);
+    const topText = rows
+      .slice(0, 25)
+      .map((row) => row.map(cleanText).join(" "))
+      .join(" ")
+      .toUpperCase();
 
-    for (const row of topRows) {
-      const rowText = row.map(cleanText).join(" ").toUpperCase();
+    const fullDocMatch = topText.match(/\b(SPO|SXFR|XFR|PO)[\s#:\-]*([0-9]{4,12})\b/i);
 
-      const typeFound = detectDocTypeFromText(rowText);
-      if (typeFound) docType = typeFound;
+    if (!docNumber && fullDocMatch) {
+      docType = fullDocMatch[1].toUpperCase();
+      docNumber = `${docType}${fullDocMatch[2]}`;
+    }
 
-      if (!docNumber) {
-        const fullDocMatch = rowText.match(/\b(SPO|SXFR|XFR|PO)[\s#:\-]*([0-9]{4,12})\b/i);
-        if (fullDocMatch) {
-          docType = fullDocMatch[1].toUpperCase();
-          docNumber = `${docType}${fullDocMatch[2]}`;
-        }
-      }
+    const branchMatch = topText.match(/\bBRANCH\s*[-:#]?\s*([A-Z]{2}\d{2})\b/i);
 
-      if (!docNumber) {
-        const labelDocMatch = rowText.match(/\b(P\.?O\.?#?|PO#?|SPO#?|SXFR#?|XFR#?|DOCUMENT|DOC)\s*[:#\-]?\s*([A-Z]*[0-9]{4,12})\b/i);
-        if (labelDocMatch) {
-          const possibleType = detectDocTypeFromText(labelDocMatch[1]) || docType;
-          docType = possibleType;
-          docNumber = normalizeDocNumber(labelDocMatch[2], docType);
-        }
-      }
-
-      if (!branch) {
-        const branchMatch = rowText.match(/\bBRANCH\s*[-:#]?\s*([A-Z]{2}\d{2})\b/i);
-        if (branchMatch) branch = branchMatch[1].toUpperCase();
-      }
-
-      if (!branch) {
-        const branchCode = row.find((cell) => /^[A-Z]{2}\d{2}$/i.test(cleanText(cell)));
-        if (branchCode) branch = cleanText(branchCode).toUpperCase();
-      }
+    if (!branch && branchMatch) {
+      branch = branchMatch[1].toUpperCase();
     }
 
     docNumber = normalizeDocNumber(docNumber, docType);
@@ -136,26 +120,57 @@ document.addEventListener("DOMContentLoaded", () => {
     return { docType, docNumber, branch };
   }
 
-  function headerScore(row) {
-    const cleaned = row.map(cleanKey);
-    let score = 0;
+  function detectReceivingReportRows(rows, meta) {
+    const fixedRows = [];
 
-    if (cleaned.includes("item") || cleaned.includes("itemnumber") || cleaned.includes("itemno") || cleaned.includes("itemid") || cleaned.includes("itemnum")) score += 10;
-    if (cleaned.includes("description") || cleaned.includes("itemdescription") || cleaned.includes("desc")) score += 10;
-    if (cleaned.includes("qty") || cleaned.includes("quantity") || cleaned.includes("qtyordered") || cleaned.includes("qtyreceived")) score += 6;
-    if (cleaned.includes("location") || cleaned.includes("loc") || cleaned.includes("bin") || cleaned.includes("binlocation")) score += 4;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const nextRow = rows[i + 1] || [];
 
-    return score;
+      if (rowIsBlank(row)) continue;
+
+      const lineNumber = cleanText(row[0]);
+      const itemNumber = cleanText(row[4]);      // Column E = ITEM #
+      const description = cleanText(nextRow[0]); // Next row Column A = DESCRIPTION
+      const location = cleanText(nextRow[6]);    // Next row Column G = BIN
+      const qty = cleanText(nextRow[12]);        // Next row Column M = QTY ORD
+
+      const isRealReceivingLine =
+        /^[0-9]{1,4}$/.test(lineNumber) &&
+        looksLikeItemNumber(itemNumber);
+
+      if (!isRealReceivingLine) continue;
+
+      fixedRows.push({
+        docType: meta.docType || $("defaultDocType")?.value || "SPO",
+        docNumber: meta.docNumber || $("defaultDocNumber")?.value || "",
+        branch: meta.branch || $("defaultBranch")?.value || "",
+        item: itemNumber,
+        qty: qty ? String(Number(qty)) : "",
+        description,
+        location
+      });
+
+      i++;
+    }
+
+    return fixedRows;
   }
 
-  function findTableHeaderRow(rows) {
+  function findHeaderRow(rows) {
     let bestIndex = 0;
     let bestScore = -1;
 
     rows.forEach((row, index) => {
-      if (index > 60) return;
+      if (index > 70) return;
 
-      const score = headerScore(row);
+      const keys = row.map(cleanKey);
+      let score = 0;
+
+      if (keys.includes("item") || keys.includes("itemnumber") || keys.includes("itemno")) score += 10;
+      if (keys.includes("description") || keys.includes("desc") || keys.includes("itemdescription")) score += 10;
+      if (keys.includes("qty") || keys.includes("quantity") || keys.includes("qtyord")) score += 5;
+      if (keys.includes("bin") || keys.includes("location") || keys.includes("loc")) score += 5;
 
       if (score > bestScore) {
         bestScore = score;
@@ -172,33 +187,31 @@ document.addEventListener("DOMContentLoaded", () => {
     headers.forEach((header, index) => {
       const key = cleanKey(header);
 
-      if (!key) return;
-
-      if (["item", "itemnumber", "itemno", "itemnum", "itemid", "itemcode", "sku", "partnumber"].includes(key)) {
+      if (["item", "itemnumber", "itemno", "itemnum", "itemid", "sku"].includes(key)) {
         map.item = index;
       }
 
-      if (["description", "desc", "itemdescription", "productdescription", "itemdesc", "productname", "name"].includes(key)) {
+      if (["description", "desc", "itemdescription", "productdescription", "itemdesc"].includes(key)) {
         map.description = index;
       }
 
-      if (["qty", "quantity", "qtyordered", "orderedqty", "orderqty", "qtyreceived", "receivedqty", "qtytoreceive", "transferqty", "shipqty"].includes(key)) {
+      if (["qty", "quantity", "qtyord", "qtyordered", "orderedqty", "qtyreceived", "receivedqty"].includes(key)) {
         map.qty = index;
       }
 
-      if (["location", "loc", "bin", "binlocation", "putawaylocation", "primarylocation", "tobin", "frombin", "slot"].includes(key)) {
+      if (["bin", "location", "loc", "binlocation", "putawaylocation"].includes(key)) {
         map.location = index;
       }
 
-      if (["branch", "branchnumber", "branchno", "warehouse", "site", "facility"].includes(key)) {
+      if (["branch", "warehouse", "site", "facility"].includes(key)) {
         map.branch = index;
       }
 
-      if (["po", "ponumber", "purchaseorder", "spo", "sponumber", "sxfr", "sxfrnumber", "xfr", "xfrnumber", "document", "documentnumber", "doc", "docnumber", "ordernumber", "receivernumber"].includes(key)) {
+      if (["po", "ponumber", "spo", "sponumber", "sxfr", "sxfrnumber", "xfr", "xfrnumber", "documentnumber", "docnumber"].includes(key)) {
         map.docNumber = index;
       }
 
-      if (["type", "doctype", "documenttype", "ordertype", "transfertype"].includes(key)) {
+      if (["type", "doctype", "documenttype"].includes(key)) {
         map.docType = index;
       }
     });
@@ -207,105 +220,46 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getCell(row, index) {
-    if (index === undefined || index === null || index < 0) return "";
+    if (index === undefined || index === null) return "";
     return cleanText(row[index]);
   }
 
-  function looksLikeLineNumber(value) {
-    const text = cleanText(value);
-    return /^[0-9]{1,3}$/.test(text);
-  }
+  function readCleanTableRows(rows, meta) {
+    const headerIndex = findHeaderRow(rows);
+    const headers = rows[headerIndex] || [];
+    const map = mapHeaders(headers);
+    const dataRows = rows.slice(headerIndex + 1);
 
-  function looksLikeItemNumber(value) {
-    const text = cleanText(value);
-    return /^[0-9]{5,8}$/.test(text) || /^[A-Z0-9-]{4,20}$/i.test(text);
-  }
+    return dataRows
+      .filter((row) => !rowIsBlank(row))
+      .map((row) => {
+        let docType = getCell(row, map.docType) || meta.docType || $("defaultDocType")?.value || "SPO";
+        docType = cleanText(docType).toUpperCase();
 
-  function looksLikeLocation(value) {
-    const text = cleanText(value).toUpperCase();
-    return /^[A-Z]{1,4}-[0-9]{1,3}-[0-9]{1,3}(-[0-9]{1,3})?$/.test(text);
-  }
+        if (!isDocType(docType)) docType = meta.docType || "SPO";
 
-  function findFallbackItem(row) {
-    const values = row.map(cleanText);
-    const numeric = values.find((v) => /^[0-9]{5,8}$/.test(v));
-    if (numeric) return numeric;
+        const docNumber = normalizeDocNumber(
+          getCell(row, map.docNumber) || meta.docNumber || $("defaultDocNumber")?.value || "",
+          docType
+        );
 
-    return values.find((v) => /^[A-Z0-9-]{4,20}$/i.test(v) && !v.includes(" ")) || "";
-  }
+        const branch = getCell(row, map.branch) || meta.branch || $("defaultBranch")?.value || "";
+        const item = getCell(row, map.item);
+        const qty = getCell(row, map.qty);
+        const description = getCell(row, map.description);
+        const location = getCell(row, map.location);
 
-  function findFallbackDescription(row, usedValues = []) {
-    const used = usedValues.map((v) => cleanText(v).toLowerCase());
-
-    const candidates = row
-      .map(cleanText)
-      .filter((value) => {
-        const lower = value.toLowerCase();
-
-        if (!value) return false;
-        if (used.includes(lower)) return false;
-        if (looksLikeLineNumber(value)) return false;
-        if (looksLikeItemNumber(value)) return false;
-        if (looksLikeLocation(value)) return false;
-        if (/^(PO|SPO|SXFR|XFR)/i.test(value)) return false;
-        if (/^[0-9.,]+$/.test(value)) return false;
-
-        return value.length >= 5;
-      });
-
-    candidates.sort((a, b) => b.length - a.length);
-
-    return candidates[0] || "";
-  }
-
-  function findFallbackLocation(row) {
-    return row.map(cleanText).find(looksLikeLocation) || "";
-  }
-
-  function rowIsProbablyBlank(row) {
-    return row.map(cleanText).every((cell) => !cell);
-  }
-
-  function normalizeUploadedDataRow(row, map, meta) {
-    let docType = getCell(row, map.docType) || meta.docType || $("defaultDocType")?.value || "PO";
-    docType = cleanText(docType).toUpperCase();
-    if (!isDocType(docType)) docType = meta.docType || $("defaultDocType")?.value || "PO";
-
-    let docNumber = getCell(row, map.docNumber) || meta.docNumber || $("defaultDocNumber")?.value || "";
-    docNumber = normalizeDocNumber(docNumber, docType);
-
-    let branch = getCell(row, map.branch) || meta.branch || $("defaultBranch")?.value || "";
-
-    let item = getCell(row, map.item);
-    if (!looksLikeItemNumber(item)) item = findFallbackItem(row);
-
-    let qty = getCell(row, map.qty);
-
-    let description = getCell(row, map.description);
-
-    if (looksLikeLineNumber(description)) {
-      description = "";
-    }
-
-    if (!description) {
-      description = findFallbackDescription(row, [docNumber, branch, item, qty]);
-    }
-
-    let location = getCell(row, map.location);
-
-    if (!looksLikeLocation(location)) {
-      location = findFallbackLocation(row);
-    }
-
-    return {
-      docType,
-      docNumber,
-      branch,
-      item,
-      qty,
-      description,
-      location
-    };
+        return {
+          docType,
+          docNumber,
+          branch,
+          item,
+          qty,
+          description,
+          location
+        };
+      })
+      .filter((row) => looksLikeItemNumber(row.item));
   }
 
   async function readUploadedFile() {
@@ -341,19 +295,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rows.length) return [];
 
     const meta = extractTopDocumentMeta(rows);
-    const headerIndex = findTableHeaderRow(rows);
-    const headers = rows[headerIndex] || [];
-    const map = mapHeaders(headers);
-    const dataRows = rows.slice(headerIndex + 1);
 
-    return dataRows
-      .filter((row) => !rowIsProbablyBlank(row))
-      .map((row) => normalizeUploadedDataRow(row, map, meta))
-      .filter((row) => {
-        if (!row.item) return false;
-        if (!row.description && !row.qty && !row.location) return false;
-        return true;
-      });
+    const receivingRows = detectReceivingReportRows(rows, meta);
+
+    if (receivingRows.length) {
+      return receivingRows;
+    }
+
+    return readCleanTableRows(rows, meta);
   }
 
   function renderUploadPreview(rows) {
@@ -462,7 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lines.forEach((line) => {
       const parts = line.split(",").map((x) => cleanText(x));
 
-      let docType = parts[0] || $("docType").value || "PO";
+      let docType = parts[0] || $("docType").value || "SPO";
       let docNumber = parts[1] || "";
       let branch = parts[2] || "";
       let item = parts[3] || "";
@@ -479,7 +428,7 @@ document.addEventListener("DOMContentLoaded", () => {
         item = branch;
         branch = "";
         docNumber = docType;
-        docType = $("docType").value || "PO";
+        docType = $("docType").value || "SPO";
       }
 
       docNumber = normalizeDocNumber(docNumber, docType);
@@ -642,7 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   $("addLabelBtn")?.addEventListener("click", () => {
-    const docType = $("docType")?.value || "PO";
+    const docType = $("docType")?.value || "SPO";
 
     addLabel({
       docType,
@@ -705,7 +654,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderUploadPreview(importedRows);
 
       if (!importedRows.length) {
-        alert("No valid lines found. Make sure the file has Item # and Description columns.");
+        alert("No valid receiving lines found. Make sure the file has real item numbers in the ITEM # column.");
       }
     } catch (err) {
       console.error(err);
@@ -732,9 +681,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const duplicate = state.labels.some((label) =>
-          String(label.docType).toLowerCase() === row.docType.toLowerCase() &&
-          String(label.docNumber).toLowerCase() === row.docNumber.toLowerCase() &&
-          String(label.item).toLowerCase() === row.item.toLowerCase() &&
+          String(label.docType).toLowerCase() === String(row.docType).toLowerCase() &&
+          String(label.docNumber).toLowerCase() === String(row.docNumber).toLowerCase() &&
+          String(label.item).toLowerCase() === String(row.item).toLowerCase() &&
           String(label.location || "").toLowerCase() === String(row.location || "").toLowerCase()
         );
 
