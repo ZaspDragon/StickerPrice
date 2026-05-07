@@ -377,17 +377,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const canvas = node.querySelector(".qr");
 
-      if (window.QRCode) {
-        QRCode.toCanvas(canvas, labelPayload(label), {
-          width: 140,
-          margin: 1,
-          errorCorrectionLevel: "M"
-        }).catch(() => {
-          canvas.replaceWith(document.createTextNode("QR failed"));
-        });
-      } else {
-        canvas.replaceWith(document.createTextNode("QR library failed"));
-      }
+canvas.style.cursor = "pointer";
+
+canvas.title = `Open Chadwell search for item ${label.item || ""}`;
+
+canvas.addEventListener("click", () => {
+  window.open(labelPayload(label), "_blank");
+});
+
+if (window.QRCode) {
+  QRCode.toCanvas(canvas, labelPayload(label), {
+    width: 140,
+    margin: 1,
+    errorCorrectionLevel: "M"
+  }).catch(() => {
+    canvas.replaceWith(document.createTextNode("QR failed"));
+  });
+} else {
+  canvas.replaceWith(document.createTextNode("QR library failed"));
+}
 
       sheet.appendChild(node);
     });
