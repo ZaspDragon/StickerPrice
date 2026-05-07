@@ -36,7 +36,7 @@
           </label>
 
           <label>Document #
-            <input id="poNumber" placeholder="Example: SPO0219241" />
+            <input id="poNumber" placeholder="Example: SPO0221063" />
           </label>
 
           <label>Branch
@@ -44,19 +44,19 @@
           </label>
 
           <label>Item #
-            <input id="itemNumber" placeholder="Example: 345022" />
+            <input id="itemNumber" placeholder="Example: 107253" />
           </label>
 
           <label>Qty
-            <input id="quantity" placeholder="Example: 24" />
+            <input id="quantity" placeholder="Example: 8" />
           </label>
 
           <label>Description
-            <input id="description" placeholder="Optional" />
+            <input id="description" placeholder="Example: INFRARED THERMOMETER" />
           </label>
 
           <label>Location
-            <input id="location" placeholder="Example: B-20-2" />
+            <input id="location" placeholder="Example: RB-12-4" />
           </label>
 
           <label>Copies
@@ -72,11 +72,9 @@
 
       <div class="card">
         <h2>Bulk Paste Labels</h2>
-        <p class="hint">
-          Format: Type, Document #, Branch, Item #, Qty, Description, Location
-        </p>
+        <p class="hint">Format: Type, Document #, Branch, Item #, Qty, Description, Location</p>
 
-        <textarea id="bulkText" rows="9" placeholder="SPO,SPO0219241,OH01,345022,8,SCOTT KITCHEN ROLL TOWELS,C-13-3"></textarea>
+        <textarea id="bulkText" rows="9" placeholder="SPO,SPO0221063,OH01,107253,8,INFRARED THERMOMETER,RB-12-4"></textarea>
 
         <div class="actions">
           <button id="bulkAddBtn" class="primary">Add Bulk Labels</button>
@@ -87,7 +85,7 @@
     <section class="card wide">
       <h2>Import from File</h2>
       <p class="hint">
-        Upload CSV, XLS, or XLSX. The app will try to detect document number, branch, item, quantity, description, and location.
+        Upload CSV, XLS, or XLSX. The app reads the PO/SPO/SXFR/XFR number from the top first, then reads the table columns below.
       </p>
 
       <div class="grid">
@@ -101,7 +99,7 @@
         </label>
 
         <label>Default Document #
-          <input id="defaultDocNumber" placeholder="Example: SPO0219241" />
+          <input id="defaultDocNumber" placeholder="Example: SPO0221063" />
         </label>
 
         <label>Default Branch
@@ -127,7 +125,7 @@
               <th>Type</th>
               <th>Doc #</th>
               <th>Branch</th>
-              <th>Item</th>
+              <th>Item #</th>
               <th>Qty</th>
               <th>Description</th>
               <th>Location</th>
@@ -184,7 +182,7 @@
                 <th>Type</th>
                 <th>Doc</th>
                 <th>Branch</th>
-                <th>Item</th>
+                <th>Item #</th>
                 <th>Qty</th>
                 <th>Description</th>
                 <th>Location</th>
@@ -199,7 +197,7 @@
 
     <section class="card wide">
       <h2>Printable Label Sheet</h2>
-      <p class="hint">Labels are sized for 4in x 2in. Print settings can place multiple labels on letter paper.</p>
+      <p class="hint">Labels are sized for 4in x 2in. Letter paper fits 2 columns cleanly.</p>
 
       <div id="labelSheet" class="label-sheet"></div>
 
