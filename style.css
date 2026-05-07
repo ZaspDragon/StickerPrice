@@ -115,10 +115,6 @@ button:hover {
   color: white;
 }
 
-.ghost {
-  background: #eef2f7;
-}
-
 .danger {
   background: #fdeaea;
   color: var(--danger);
@@ -170,7 +166,7 @@ button:hover {
   background: white;
   color: black;
   display: grid;
-  grid-template-columns: 1.1in 1fr;
+  grid-template-columns: 1.08in 1fr;
   gap: 0.08in;
   padding: 0.1in;
   overflow: hidden;
@@ -218,11 +214,6 @@ button:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.itemLine,
-.label-right div {
-  min-width: 0;
 }
 
 .item,
@@ -356,12 +347,6 @@ th {
     page-break-inside: avoid !important;
   }
 
-  .label-left {
-    display: grid !important;
-    place-items: center !important;
-    overflow: hidden !important;
-  }
-
   .qr {
     width: 0.95in !important;
     height: 0.95in !important;
@@ -371,50 +356,13 @@ th {
     font-size: 10px !important;
     line-height: 1.12 !important;
     overflow: hidden !important;
-    min-width: 0 !important;
   }
 
   .poLine {
     font-size: 15px !important;
-    line-height: 1 !important;
-    font-weight: 900 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
   }
 
   .branchLine {
     font-size: 13px !important;
-    line-height: 1 !important;
-    font-weight: 800 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  .label-title {
-    border-bottom: 1px solid #111 !important;
-    margin-bottom: 3px !important;
-    padding-bottom: 2px !important;
-  }
-
-  .item,
-  .desc,
-  .location {
-    overflow: hidden !important;
-    display: -webkit-box !important;
-    -webkit-box-orient: vertical !important;
-  }
-
-  .item {
-    -webkit-line-clamp: 2 !important;
-  }
-
-  .desc {
-    -webkit-line-clamp: 2 !important;
-  }
-
-  .location {
-    -webkit-line-clamp: 1 !important;
   }
 }
