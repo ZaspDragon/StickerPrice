@@ -619,29 +619,25 @@ if (window.QRCode) {
     if ($("location")) $("location").value = location;
     if ($("labelCopies")) $("labelCopies").value = String(copies);
 
-    const existing = state.labels.some((label) =>
-      cleanText(label.docNumber).toUpperCase() === docNumber.toUpperCase() &&
-      cleanText(label.item).toUpperCase() === item.toUpperCase() &&
-      cleanText(label.location).toUpperCase() === location.toUpperCase()
-    );
+    // A WMS handoff is a print job, not a merge with old browser labels.
+    // Clear stale labels so the receiver prints exactly the requested item/copies.
+    state.labels = [];
 
-    if (!existing) {
-      for (let i = 0; i < copies; i++) {
-        state.labels.push({
-          lineId: makeLineId(docType, docNumber, item, location),
-          docType,
-          docNumber,
-          branch,
-          item,
-          qty,
-          description,
-          location,
-          createdAt: new Date().toISOString()
-        });
-      }
-      save();
+    for (let i = 0; i < copies; i++) {
+      state.labels.push({
+        lineId: makeLineId(docType, docNumber, item, location),
+        docType,
+        docNumber,
+        branch,
+        item,
+        qty,
+        description,
+        location,
+        createdAt: new Date().toISOString()
+      });
     }
 
+    save();
     renderLabels();
 
     const summary = $("importSummary");
