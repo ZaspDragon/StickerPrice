@@ -595,6 +595,59 @@ if (window.QRCode) {
     URL.revokeObjectURL(url);
   }
 
+  function importFromWmsQuery() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("source") !== "wms") return;
+
+    const docType = cleanText(params.get("type") || "PO").toUpperCase();
+    const docNumber = normalizeDocNumber(params.get("doc") || "", docType);
+    const branch = cleanText(params.get("branch") || "");
+    const item = cleanText(params.get("item") || "");
+    const qty = cleanText(params.get("qty") || "1");
+    const description = cleanText(params.get("description") || "");
+    const location = cleanText(params.get("location") || "");
+    const copies = Math.max(1, Number(params.get("copies") || qty || 1) || 1);
+
+    if (!docNumber || !item) return;
+
+    if ($("docType")) $("docType").value = isDocType(docType) ? docType : "PO";
+    if ($("poNumber")) $("poNumber").value = docNumber;
+    if ($("branch")) $("branch").value = branch;
+    if ($("itemNumber")) $("itemNumber").value = item;
+    if ($("quantity")) $("quantity").value = qty;
+    if ($("description")) $("description").value = description;
+    if ($("location")) $("location").value = location;
+    if ($("labelCopies")) $("labelCopies").value = String(copies);
+
+    const existing = state.labels.some((label) =>
+      cleanText(label.docNumber).toUpperCase() === docNumber.toUpperCase() &&
+      cleanText(label.item).toUpperCase() === item.toUpperCase() &&
+      cleanText(label.location).toUpperCase() === location.toUpperCase()
+    );
+
+    if (!existing) {
+      for (let i = 0; i < copies; i++) {
+        state.labels.push({
+          lineId: makeLineId(docType, docNumber, item, location),
+          docType,
+          docNumber,
+          branch,
+          item,
+          qty,
+          description,
+          location,
+          createdAt: new Date().toISOString()
+        });
+      }
+      save();
+    }
+
+    renderLabels();
+
+    const summary = $("importSummary");
+    if (summary) summary.textContent = `Loaded from WMS: ${item} · ${copies} label(s)`;
+  }
+
   $("addLabelBtn")?.addEventListener("click", () => {
     const docType = $("docType")?.value || "SPO";
 
@@ -725,6 +778,7 @@ if (window.QRCode) {
     }
   });
 
+  importFromWmsQuery();
   renderLabels();
   renderLog();
 });
